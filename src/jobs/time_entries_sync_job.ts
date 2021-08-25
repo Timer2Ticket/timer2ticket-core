@@ -350,11 +350,11 @@ export class TimeEntriesSyncJob extends SyncJob {
     }
     // else ignore (older than someDaysAgoFilter)
 
-    // update TESO with new date mainly
+    // update TESO with new date mainly (lastUpdated -> remain same!)
     if (originServiceTimeEntryObjectWrapper.timeEntry) {
       this._updateTimeEntrySyncedObject(
         timeEntrySyncedObjectWrapper.timeEntrySyncedObject,
-        originServiceTimeEntryObjectWrapper.timeEntry.lastUpdated,
+        timeEntrySyncedObjectWrapper.timeEntrySyncedObject.lastUpdated,
         originServiceTimeEntryObjectWrapper.timeEntry.start
       );
     }

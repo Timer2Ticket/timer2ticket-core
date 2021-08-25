@@ -269,7 +269,7 @@ export class RedmineSyncedService implements SyncedService {
     return entries;
   }
 
-  async getTimeEntryById(id: number | string): Promise<TimeEntry | null> {
+  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
     let response;
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
@@ -292,15 +292,15 @@ export class RedmineSyncedService implements SyncedService {
     }
 
     const durationInMilliseconds = response.body.time_entry['hours'] * 60 * 60 * 1000;
-    const start = new Date(response.body.time_entry['spent_on']);
-    const end = new Date(new Date(response.body.time_entry['spent_on']).setMilliseconds(durationInMilliseconds));
+    const teStart = new Date(response.body.time_entry['spent_on']);
+    const teEnd = new Date(new Date(response.body.time_entry['spent_on']).setMilliseconds(durationInMilliseconds));
 
     return new RedmineTimeEntry(
       response.body.time_entry['id'],
       response.body.time_entry['project']['id'],
       response.body.time_entry['comments'],
-      start,
-      end,
+      teStart,
+      teEnd,
       durationInMilliseconds,
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
