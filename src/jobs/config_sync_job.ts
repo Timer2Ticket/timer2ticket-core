@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Mapping } from "../models/mapping/mapping";
 import { MappingsObject } from "../models/mapping/mappings_object";
 import { ServiceDefinition } from "../models/service_definition/service_definition";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
+import { Constants } from "../shared/constants";
 import { databaseService } from "../shared/database_service";
+import { Utilities } from "../shared/utilities";
 import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
@@ -100,12 +103,25 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
-    const obsoleteMappings =
-      this._user
-        .mappings
-        .filter(
-          mapping => checkedMappings.find(checkedMapping => checkedMapping === mapping)
-            === undefined);
+    const obsoleteMappings: Mapping[] = [];
+    const now = new Date();
+    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+
+    // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
+    for (const mapping of this._user.mappings) {
+      const isObsolete = checkedMappings.find(checkedMapping => checkedMapping === mapping) === undefined;
+      if (isObsolete && mapping.markedToDelete) {
+        // check if days passed from when it was markedToDelete
+        if (Utilities.compare(mapping.markedToDelete, markedToDeleteTresholdDate) < 0) {
+          // if yes => delete mapping and all objects from other services (add to array for delete below)
+          obsoleteMappings.push(mapping);
+        }
+        // else do nothing, wait for markedToDelete to reach the treshold
+      } else if (isObsolete && mapping.markedToDelete === undefined) {
+        // set markedToDelete to now only
+        mapping.markedToDelete = new Date();
+      }
+    }
 
     if (obsoleteMappings.length > 0) {
       for (const mapping of obsoleteMappings) {
@@ -234,7 +250,7 @@ export class ConfigSyncJob extends SyncJob {
     let newObject;
     try {
       newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
-    } catch (ex) {
+    } catch (ex: any) {
       if (ex.status !== 400) {
         throw ex;
       }
@@ -264,7 +280,7 @@ export class ConfigSyncJob extends SyncJob {
       let operationOk = true;
       try {
         operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type);
-      } catch (ex) {
+      } catch (ex: any) {
         if (ex.status === 404) {
           // service object is missing, it is ok to delete the mapping
           operationOk = true;

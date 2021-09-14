@@ -5,4 +5,5 @@ export class Mapping {
   primaryObjectType?: string;
   name!: string;
   mappingsObjects: MappingsObject[] = [];
+  markedToDelete?: Date;
 }

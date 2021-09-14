@@ -6,4 +6,6 @@ export class Constants {
   static sentryDsn = process.env.SENTRY_DSN || '';
 
   static defaultWaitDurationInCaseOfTooManyRequestsInMilliseconds = 1500;
+
+  static configObjectMappingMarkedToDeleteTresholdInDays = 7;
 }
