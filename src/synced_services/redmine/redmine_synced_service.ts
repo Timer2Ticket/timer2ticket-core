@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ServiceDefinition } from "../../models/service_definition/service_definition";
 import { TimeEntry } from "../../models/synced_service/time_entry/time_entry";
 import { SyncedService } from "../synced_service";
@@ -279,7 +280,7 @@ export class RedmineSyncedService implements SyncedService {
           .type('application/json')
           .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
       );
-    } catch (err) {
+    } catch (err: any) {
       if (err && (err.status === 403 || err.status === 404)) {
         return null;
       } else {
@@ -384,15 +385,23 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .delete(`${this._timeEntriesUri.substring(0, this._timeEntriesUri.length - 5)}/${id}.json`)
-        .accept('application/json')
-        .type('application/json')
-        .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-    );
+    try {
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .delete(this._timeEntryUri.replace('[id]', id.toString()))
+          .accept('application/json')
+          .type('application/json')
+          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+      );
 
-    return response.ok;
+      return response.ok;
+    } catch (err: any) {
+      if (err && (err.status === 403 || err.status === 404)) {
+        return true;
+      } else {
+        return false;
+      }
+    }
   }
 
   /**
