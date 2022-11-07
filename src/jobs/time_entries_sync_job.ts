@@ -431,16 +431,30 @@ export class TimeEntriesSyncJob extends SyncJob {
     timeEntrySyncedObject.date = new Date(Utilities.getOnlyDateString(new Date(date)));
   }
 
+  private _getTESOsServicesLowestArchiveLimit(timeEntrySyncedObject: TimeEntrySyncedObject): number {
+    let minimum = 365000;
+    const timeEntryObjects = timeEntrySyncedObject.serviceTimeEntryObjects;
+    for (let i = 0; i < timeEntryObjects.length; i++) {
+      const serviceName = timeEntryObjects[i].service;
+      const limit = ServiceObject.archiveLimits[serviceName]
+      if (limit < minimum) {
+        minimum = limit;
+      }
+    }
+    return minimum;
+  }
+
   private _isTimeEntrySyncedObjectArchived(timeEntrySyncedObjectWrapper: TimeEntrySyncedObjectWrapper): boolean {
-    const oldTime = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.date?.getTime();
+    const archiveLimitDays = this._getTESOsServicesLowestArchiveLimit(timeEntrySyncedObjectWrapper.timeEntrySyncedObject)
+    const oldTime = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.lastUpdated;
     if (!oldTime) {
-      throw new Error("Date for TESO not defined!")
+      throw new Error("lastUpdated for TESO not defined!")
     }
     const newTime = Date.now();
     const timeDifference = oldTime - newTime;
     const daysDifference = timeDifference / (1000 * 3600 * 24);
 
-    return daysDifference > 50;
+    return daysDifference > (archiveLimitDays - 3);
   }
 }
 
