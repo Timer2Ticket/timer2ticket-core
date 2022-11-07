@@ -137,19 +137,21 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     // other scenarios b), c), d), e)
     for (const timeEntrySyncedObjectWrapper of timeEntrySyncedObjectWrappers) {
-      try {
-        if (await this._checkTimeEntrySyncedObject(timeEntrySyncedObjectWrapper, someDaysAgoFilter)) {
-          // some changes probably were made to TESO object, update it in db
-          const dbUpdateResult = await databaseService.updateTimeEntrySyncedObject(timeEntrySyncedObjectWrapper.timeEntrySyncedObject) !== null;
-          operationsOk &&= dbUpdateResult;
-          if (!dbUpdateResult) {
-            console.error('err: TESyncJob: b), c), d), e); DB update');
+      if (!this._isTimeEntrySyncedObjectArchived(timeEntrySyncedObjectWrapper)) {
+        try {
+          if (await this._checkTimeEntrySyncedObject(timeEntrySyncedObjectWrapper, someDaysAgoFilter)) {
+            // some changes probably were made to TESO object, update it in db
+            const dbUpdateResult = await databaseService.updateTimeEntrySyncedObject(timeEntrySyncedObjectWrapper.timeEntrySyncedObject) !== null;
+            operationsOk &&= dbUpdateResult;
+            if (!dbUpdateResult) {
+              console.error('err: TESyncJob: b), c), d), e); DB update');
+            }
           }
+        } catch (ex) {
+          operationsOk = false;
+          console.error(ex);
+          console.error('err: TESyncJob: b), c), d), e); exception');
         }
-      } catch (ex) {
-        operationsOk = false;
-        console.error(ex);
-        console.error('err: TESyncJob: b), c), d), e); exception');
       }
     }
 
@@ -427,6 +429,18 @@ export class TimeEntriesSyncJob extends SyncJob {
     : void {
     timeEntrySyncedObject.lastUpdated = new Date(lastUpdated).getTime();
     timeEntrySyncedObject.date = new Date(Utilities.getOnlyDateString(new Date(date)));
+  }
+
+  private _isTimeEntrySyncedObjectArchived(timeEntrySyncedObjectWrapper: TimeEntrySyncedObjectWrapper): boolean {
+    const oldTime = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.date?.getTime();
+    if (!oldTime) {
+      throw new Error("Date for TESO not defined!")
+    }
+    const newTime = Date.now();
+    const timeDifference = oldTime - newTime;
+    const daysDifference = timeDifference / (1000 * 3600 * 24);
+
+    return daysDifference > 50;
   }
 }
 
