@@ -132,33 +132,44 @@ export class ConfigSyncJob extends SyncJob {
         // With POId and service name, we get all the TimeEntries from API
         // Then we find the related TimeEntrySyncedObjects and set them as archived.
         const primaryObjectId = mapping.primaryObjectId;
-        const primaryMappingObject = mapping.mappingsObjects.find($object => $object.id === primaryObjectId) //possible 2 timeEntries with same ID can exist
+        const primaryMappingObject = mapping.mappingsObjects.find($object => $object.id === primaryObjectId) //possible 2 timeEntries with same ID can exist, low probability, i dont deal with it here
         if (primaryMappingObject === undefined) {
           operationsOk = false;
-          console.error('err: ConfigSyncJob: primaryMappingObject || does not exist');
+          console.error('err: ConfigSyncJob: primaryMappingObject does not exist');
         } else {
           const primaryObjectServiceName = primaryMappingObject.service;
           if (primaryObjectServiceName !== 'Redmine') {
-            throw 'Archive TESOs functionality is not yet supported for services other than Redmine!';
-          }
-          const service = SyncedServiceCreator.create(primaryServiceDefinition)
-          const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObject(mapping);
-          if (!relatedTimeEntriesFromApi) {
-            throw 'Failed GETing relatedTimeEntriesFromApi!'
-          }
-          //bolo by vhodne mat vacsiu funkcionalitu, bud z pohladu pristupu na DB (getovanie TESO na zaklade api timeEntryID),
-          // ako aj na urovni programu, hodilo by sa mat reusable funkciu, ktora dokaze getnut TESO pre timeEntry, podobne sa to vyuziva aj v time-entries-jobe
-          const timeEntrySyncedObjectsFromDb = await databaseService.getTimeEntrySyncedObjects(this._user);
-          if (!timeEntrySyncedObjectsFromDb) return false;
-
-          for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
-            for (const timeEntrySyncedObjectFromDb of timeEntrySyncedObjectsFromDb) {
-              const foundFlag = timeEntrySyncedObjectFromDb.serviceTimeEntryObjects.find(
-                  $object => $object.service === primaryServiceDefinition.name && $object.id === timeEntryFromApi.id) !== null;
-              if (foundFlag) {
-                timeEntrySyncedObjectFromDb.archived = true;
-                timeEntriesToArchive.push(timeEntrySyncedObjectFromDb)
-                break;
+            operationsOk = false;
+            console.error('Archive TESOs functionality is not yet supported for services other than Redmine!');
+          } else {
+            const service = SyncedServiceCreator.create(primaryServiceDefinition)
+            const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObject(mapping);
+            if (!relatedTimeEntriesFromApi) {
+              operationsOk = false;
+              console.error('Failed GETing relatedTimeEntriesFromApi!');
+            } else {
+              //bolo by vhodne mat vacsiu funkcionalitu, bud z pohladu pristupu na DB (getovanie TESO na zaklade api timeEntryID),
+              // ako aj na urovni programu, hodilo by sa mat reusable funkciu, ktora dokaze getnut TESO pre timeEntry, podobne sa to vyuziva aj v time-entries-jobe
+              const timeEntrySyncedObjectsFromDb = await databaseService.getTimeEntrySyncedObjects(this._user);
+              if (!timeEntrySyncedObjectsFromDb) {
+                operationsOk = false;
+                console.error('Failed getting TESOs from DB!');
+              } else {
+                //loop trough api time entries
+                for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
+                  //loop trough db timeEntrySyncedObjects
+                  for (const timeEntrySyncedObjectFromDb of timeEntrySyncedObjectsFromDb) {
+                    //search in TESOs STEOs
+                    const foundFlag = timeEntrySyncedObjectFromDb.serviceTimeEntryObjects.find(
+                        $object => $object.service === primaryServiceDefinition.name && $object.id === timeEntryFromApi.id) !== null;
+                    //only one TESO connects to one timeEntry, we can break here to save time.
+                    if (foundFlag) {
+                      timeEntrySyncedObjectFromDb.archived = true;
+                      timeEntriesToArchive.push(timeEntrySyncedObjectFromDb)
+                      break;
+                    }
+                  }
+                }
               }
             }
           }
@@ -168,6 +179,7 @@ export class ConfigSyncJob extends SyncJob {
         operationsOk &&= await this._deleteMapping(mapping);
       }
 
+      console.log('Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
         timeEntryToArchive.archived = true
         operationsOk &&= await databaseService.updateTimeEntrySyncedObject(timeEntryToArchive) !== null;
