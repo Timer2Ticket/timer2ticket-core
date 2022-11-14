@@ -437,4 +437,8 @@ export class TogglTrackSyncedService implements SyncedService {
     }
     return mappingsObjectsResult;
   }
+
+  getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null> {
+    throw 'getTimeEntriesRelatedToMappingObject is not supported on Toggl service!'
+  }
 }
