@@ -313,12 +313,14 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   async getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null> {
+    console.log('[OMR] -> getTimeEntriesRelatedToMappingObject called!');
     let response;
 
     if (mapping.primaryObjectType !== "issue") {
       throw 'getTimeEntriesRelatedToMappingObject supports only issues for now!'
     }
     try {
+      console.log('[OMR] -> posielam request!');
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
               .get(this._timeEntriesOfIssueUri.replace('[id]', mapping.primaryObjectId.toString()))
@@ -327,6 +329,7 @@ export class RedmineSyncedService implements SyncedService {
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
       );
     } catch (err: any) {
+      console.log('[OMR] -> chyteny error v response try - catch bloku!');
       if (err && (err.status === 403 || err.status === 404)) {
         return null;
       } else {
@@ -334,10 +337,12 @@ export class RedmineSyncedService implements SyncedService {
       }
     }
 
+    console.log('[OMR] -> pred response checkom!');
     if (!response || !response.ok) {
       return null;
     }
 
+    console.log('[OMR] -> response check bez problemov!');
     const entries: RedmineTimeEntry[] = [];
 
     response.body['time_entries'].forEach((timeEntry: never) => {//TODO refactor to make it non-duplicated code
@@ -359,6 +364,7 @@ export class RedmineSyncedService implements SyncedService {
           ),
       );
     });
+    console.log('[OMR] -> vraciam entries z redmine_synced_service classy!');
 
     return entries;
   }

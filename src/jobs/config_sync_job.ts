@@ -23,6 +23,7 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
+    console.log('config_sync_job started for user '.concat(this._user.username));
     const primaryServiceDefinition: ServiceDefinition | undefined
       = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.isPrimary);
 
@@ -126,6 +127,7 @@ export class ConfigSyncJob extends SyncJob {
 
     if (obsoleteMappings.length > 0) {
       const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
+      console.log('[OMR] -> number of obsolete mappings='.concat(String(obsoleteMappings.length)))
       for (const mapping of obsoleteMappings) {
         //there is no explicit link between TESO and Mappings in the T2T DB
         //we deal with this problem by saving mappings primaryObjectId and its service.
@@ -142,12 +144,15 @@ export class ConfigSyncJob extends SyncJob {
             operationsOk = false;
             console.error('Archive TESOs functionality is not yet supported for services other than Redmine!');
           } else {
+            console.log('[OMR] -> Obsoletes object service is Redmine!')
             const service = SyncedServiceCreator.create(primaryServiceDefinition)
+            console.log('[OMR] -> calling for relatedTimeEntriesFromApi')
             const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObject(mapping);
             if (!relatedTimeEntriesFromApi) {
               operationsOk = false;
-              console.error('Failed GETing relatedTimeEntriesFromApi!');
+              console.error('[OMR] -> Failed GETing relatedTimeEntriesFromApi!');
             } else {
+              console.log('[OMR] -> relatedTimeEntriesFromApi returned with count='.concat(String(relatedTimeEntriesFromApi.length)));
               //bolo by vhodne mat vacsiu funkcionalitu, bud z pohladu pristupu na DB (getovanie TESO na zaklade api timeEntryID),
               // ako aj na urovni programu, hodilo by sa mat reusable funkciu, ktora dokaze getnut TESO pre timeEntry, podobne sa to vyuziva aj v time-entries-jobe
               const timeEntrySyncedObjectsFromDb = await databaseService.getTimeEntrySyncedObjects(this._user);
