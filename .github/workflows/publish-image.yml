@@ -30,7 +30,7 @@ jobs:
       with:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-        registry: docker.pkg.github.com
+        registry: https://ghcr.io
         repository: timer2ticket/timer2ticket-core/timer2ticket-core
         tag_with_sha: true
         tag_with_ref: true
