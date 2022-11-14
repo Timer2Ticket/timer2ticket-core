@@ -23,6 +23,7 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
+    console.log('config_sync_job started for user '.concat(this._user.username));
     const primaryServiceDefinition: ServiceDefinition | undefined
       = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.isPrimary);
 
