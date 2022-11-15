@@ -78,9 +78,12 @@ export class TogglTrackSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllServiceObjects(): Promise<ServiceObject[]> {
+  async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
     const projects = await this._getAllProjects();
     const tags = await this._getAllTags();
+    if (typeof projects == "boolean" || typeof tags === "boolean") {
+      return false;
+    }
     return projects.concat(tags);
   }
 
@@ -139,12 +142,24 @@ export class TogglTrackSyncedService implements SyncedService {
   // PROJECTS **************************************************
   // ***********************************************************
 
-  private async _getAllProjects(): Promise<ServiceObject[]> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`)
-        .auth(this._serviceDefinition.apiKey, 'api_token')
-    );
+  private async _getAllProjects(): Promise<ServiceObject[] | boolean> {
+    let response;
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+      );
+    } catch (ex: any) {
+      if (ex.status === 403 || ex.status === 401) {
+          console.error('[TOGGL] getAllProjects failed with status code='.concat(ex.status));
+          console.log('please, fix the apiKey of this user or set him as inactive');
+      } else {
+        console.error('[TOGGL] getAllProjects failed with different reason than 403/401 response code!');
+      }
+      return false;
+    }
+
 
     const projects: ServiceObject[] = [];
 
@@ -196,12 +211,25 @@ export class TogglTrackSyncedService implements SyncedService {
   // TAGS ******************************************************
   // ***********************************************************
 
-  private async _getAllTags(): Promise<ServiceObject[]> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`)
-        .auth(this._serviceDefinition.apiKey, 'api_token')
-    );
+  private async _getAllTags(): Promise<ServiceObject[] | boolean> {
+    let response;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+      );
+    } catch (ex: any) {
+      if (ex.status === 403 || ex.status === 401) {
+        console.error('[TOGGL] getAllTagss failed with status code='.concat(ex.status));
+        console.log('please, fix the apiKey of this user or set him as inactive');
+      } else {
+        console.error('[TOGGL] getAllTags failed with different reason than 403/401 response code!');
+      }
+      return false;
+    }
+
 
     const tags: ServiceObject[] = [];
 

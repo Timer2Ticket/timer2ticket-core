@@ -7,8 +7,9 @@ import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_
 export interface SyncedService {
   /**
    * Get all service objects which: projects, issues, activities etc.
+   * returns false in case of
    */
-  getAllServiceObjects(): Promise<ServiceObject[]>;
+  getAllServiceObjects(): Promise<ServiceObject[] | boolean>;
 
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one

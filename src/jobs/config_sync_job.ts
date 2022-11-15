@@ -34,7 +34,13 @@ export class ConfigSyncJob extends SyncJob {
     const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
     // Gets all objects from primary to sync with the other ones
-    const objectsToSync: ServiceObject[] = await primarySyncedService.getAllServiceObjects();
+    const objectsToSync = await primarySyncedService.getAllServiceObjects();
+    //if we get boolean, a problem occurred while getting data from service (most likely 401 or 403 error)
+    //we dont have all the service objects and stop the job
+    if (typeof objectsToSync === "boolean") {
+      console.error('Problem occurred while getting primary service objects of user='.concat(this._user.username, ', job stopped.'));
+      return false;
+    }
 
     // Also, prepare all secondary services' service objects to speed up the process
     const secondaryServicesWrappersMap: Map<string, SyncedServiceWrapper> = new Map();
@@ -44,6 +50,11 @@ export class ConfigSyncJob extends SyncJob {
     for (const secondaryServiceDefinition of secondaryServiceDefinitions) {
       const syncedService = SyncedServiceCreator.create(secondaryServiceDefinition);
       const allServiceObjects = await syncedService.getAllServiceObjects();
+      //same as above, there was a problem communication problem with service. We stop the job.
+      if (typeof allServiceObjects === "boolean") {
+        console.error('Problem occurred while getting secondary service objects of user='.concat(this._user.username, ', job stopped.'));
+        return false;
+      }
 
       secondaryServicesWrappersMap.set(
         secondaryServiceDefinition.name,
