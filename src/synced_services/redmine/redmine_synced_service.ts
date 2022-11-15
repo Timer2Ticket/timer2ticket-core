@@ -129,14 +129,26 @@ export class RedmineSyncedService implements SyncedService {
     const projects: ServiceObject[] = [];
 
     do {
-      const response = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-          .get(this._projectsUri)
-          .query(queryParams)
-          .accept('application/json')
-          .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
+      let response;
+      try {
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._projectsUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        );
+      } catch (ex: any) {
+        if (ex.status === 403 || ex.status === 401) {
+          console.error('[REDMINE] getAllProjects failed with status code='.concat(ex.status));
+          console.log('please, fix the apiKey of this user or set him as inactive');
+        } else {
+          console.error('[REDMINE] getAllProjects failed with different reason than 403/401 response code!');
+        }
+        return [];
+      }
+
 
       response.body?.projects.forEach((project: never) => {
         projects.push(
