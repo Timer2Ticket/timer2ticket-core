@@ -149,11 +149,12 @@ export class ConfigSyncJob extends SyncJob {
         // With POId and service name, we get all the TimeEntries from API
         // Then we find the related TimeEntrySyncedObjects and set them as archived.
         const primaryObjectId = mapping.primaryObjectId;
-        const primaryMappingObject = mapping.mappingsObjects.find($object => $object.id === primaryObjectId) //possible 2 timeEntries with same ID can exist, low probability, i dont deal with it here
-        if (primaryMappingObject === undefined) {
+        const primaryMappingObjects = mapping.mappingsObjects.filter($object => $object.id === primaryObjectId) //possible 2 mapping objects with same ID can exist, low probability, i dont deal with it here
+        if (primaryMappingObjects.length !== 1) {
           operationsOk = false;
-          console.error('err: ConfigSyncJob: primaryMappingObject does not exist');
+          console.error('err: ConfigSyncJob: primaryMappingObject does not exist or 2 timeEntries with same ID exist');
         } else {
+          const primaryMappingObject = primaryMappingObjects[0];
           const primaryObjectServiceName = primaryMappingObject.service;
           if (primaryObjectServiceName !== 'Redmine') {
             operationsOk = false;
