@@ -55,6 +55,7 @@ export class ConfigSyncJob extends SyncJob {
       );
     }
 
+    console.log('[OMR] -> som za initial setUpom');
     // Check primary objects and mappings, if something is wrong, fix it
     // Scenarios (based on objects from primary service):
     // a) Mapping is missing
@@ -104,6 +105,8 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
 
+    console.log('[OMR] -> som za checkom objectsToSync');
+
     // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
     const obsoleteMappings: Mapping[] = [];
     const now = new Date();
@@ -125,9 +128,10 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
 
+    console.log('[OMR] -> som za markToDelete, pocet obsolete='.concat(String(obsoleteMappings.length)));
+
     if (obsoleteMappings.length > 0) {
       const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
-      console.log('[OMR] -> number of obsolete mappings='.concat(String(obsoleteMappings.length)))
       for (const mapping of obsoleteMappings) {
         //there is no explicit link between TESO and Mappings in the T2T DB
         //we deal with this problem by saving mappings primaryObjectId and its service.
@@ -198,6 +202,7 @@ export class ConfigSyncJob extends SyncJob {
             mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping)
               === undefined);
     }
+    console.log('[OMR] -> som za obsoleteMappings removal');
 
     if (operationsOk) {
       // if all operations OK => set lastSuccessfullyDone (important to set not null for starting TE syncing)
