@@ -78,9 +78,12 @@ export class TogglTrackSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllServiceObjects(): Promise<ServiceObject[]> {
+  async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
     const projects = await this._getAllProjects();
     const tags = await this._getAllTags();
+    if (typeof projects == "boolean" || typeof tags === "boolean") {
+      return false;
+    }
     return projects.concat(tags);
   }
 
@@ -139,7 +142,7 @@ export class TogglTrackSyncedService implements SyncedService {
   // PROJECTS **************************************************
   // ***********************************************************
 
-  private async _getAllProjects(): Promise<ServiceObject[]> {
+  private async _getAllProjects(): Promise<ServiceObject[] | boolean> {
     let response;
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
@@ -154,7 +157,7 @@ export class TogglTrackSyncedService implements SyncedService {
       } else {
         console.error('[TOGGL] getAllProjects failed with different reason than 403/401 response code!');
       }
-      return [];
+      return false;
     }
 
 
@@ -208,7 +211,7 @@ export class TogglTrackSyncedService implements SyncedService {
   // TAGS ******************************************************
   // ***********************************************************
 
-  private async _getAllTags(): Promise<ServiceObject[]> {
+  private async _getAllTags(): Promise<ServiceObject[] | boolean> {
     let response;
 
     try {
@@ -224,7 +227,7 @@ export class TogglTrackSyncedService implements SyncedService {
       } else {
         console.error('[TOGGL] getAllTags failed with different reason than 403/401 response code!');
       }
-      return [];
+      return false;
     }
 
 

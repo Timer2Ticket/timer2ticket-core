@@ -89,9 +89,12 @@ export class RedmineSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllServiceObjects(): Promise<ServiceObject[]> {
+  async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
     const projects = await this._getAllProjects();
     const additionalServiceObjects = await this._getAllAdditionalServiceObjects();
+    if (typeof projects === "boolean" || typeof additionalServiceObjects === "boolean") {
+      return false;
+    }
     return projects.concat(additionalServiceObjects);
   }
 
@@ -118,7 +121,7 @@ export class RedmineSyncedService implements SyncedService {
   // PROJECTS **************************************************
   // ***********************************************************
 
-  private async _getAllProjects(): Promise<ServiceObject[]> {
+  private async _getAllProjects(): Promise<ServiceObject[] | boolean> {
     let totalCount = 0;
 
     const queryParams = {
@@ -146,7 +149,7 @@ export class RedmineSyncedService implements SyncedService {
         } else {
           console.error('[REDMINE] getAllProjects failed with different reason than 403/401 response code!');
         }
-        return [];
+        return false;
       }
 
 
@@ -173,7 +176,7 @@ export class RedmineSyncedService implements SyncedService {
   /**
    * Return Issues and Activities both in array of service objects
    */
-  private async _getAllAdditionalServiceObjects(): Promise<ServiceObject[]> {
+  private async _getAllAdditionalServiceObjects(): Promise<ServiceObject[] | boolean> {
     let totalCount = 0;
 
     const queryParams = {
@@ -185,14 +188,26 @@ export class RedmineSyncedService implements SyncedService {
 
     // issues (paginate)
     do {
-      const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-          .get(this._issuesUri)
-          .query(queryParams)
-          .accept('application/json')
-          .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
+      let responseIssues;
+      try {
+        responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._issuesUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        );
+      } catch (ex: any) {
+        if (ex.status === 403 || ex.status === 401) {
+          console.error('[REDMINE] getAllAdditionalServiceObjects for issues failed with status code='.concat(ex.status));
+          console.log('please, fix the apiKey of this user or set him as inactive');
+        } else {
+          console.error('[REDMINE] getAllAdditionalServiceObjects for issues failed with different reason than 403/401 response code!');
+        }
+        return false;
+      }
+
 
       responseIssues.body?.issues.forEach((issue: never) => {
         issues.push(
@@ -209,14 +224,26 @@ export class RedmineSyncedService implements SyncedService {
 
     const timeEntryActivities: ServiceObject[] = [];
 
-    // time entry activities (do not paginate)
-    const responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .get(this._timeEntryActivitiesUri)
-        .accept('application/json')
-        .type('application/json')
-        .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-    );
+    let responseTimeEntryActivities;
+    try {
+      // time entry activities (do not paginate)
+      responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._timeEntryActivitiesUri)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+      );
+    } catch (ex: any) {
+      if (ex.status === 403 || ex.status === 401) {
+        console.error('[REDMINE] getAllAdditionalServiceObjects for timeEntryActivities failed with status code='.concat(ex.status));
+        console.log('please, fix the apiKey of this user or set him as inactive');
+      } else {
+        console.error('[REDMINE] getAllAdditionalServiceObjects for timeEntryActivities failed with different reason than 403/401 response code!');
+      }
+      return false;
+    }
+
 
     responseTimeEntryActivities.body?.time_entry_activities.forEach((timeEntryActivity: never) => {
       timeEntryActivities.push(
