@@ -143,12 +143,7 @@ export class RedmineSyncedService implements SyncedService {
                 .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
         );
       } catch (ex: any) {
-        if (ex.status === 403 || ex.status === 401) {
-          console.error('[REDMINE] getAllProjects failed with status code='.concat(ex.status));
-          console.log('please, fix the apiKey of this user or set him as inactive');
-        } else {
-          console.error('[REDMINE] getAllProjects failed with different reason than 403/401 response code!');
-        }
+        this.handleResponseException(ex, 'getAllProjects');
         return false;
       }
 
@@ -199,12 +194,7 @@ export class RedmineSyncedService implements SyncedService {
                 .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
         );
       } catch (ex: any) {
-        if (ex.status === 403 || ex.status === 401) {
-          console.error('[REDMINE] getAllAdditionalServiceObjects for issues failed with status code='.concat(ex.status));
-          console.log('please, fix the apiKey of this user or set him as inactive');
-        } else {
-          console.error('[REDMINE] getAllAdditionalServiceObjects for issues failed with different reason than 403/401 response code!');
-        }
+        this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
         return false;
       }
 
@@ -235,12 +225,7 @@ export class RedmineSyncedService implements SyncedService {
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
       );
     } catch (ex: any) {
-      if (ex.status === 403 || ex.status === 401) {
-        console.error('[REDMINE] getAllAdditionalServiceObjects for timeEntryActivities failed with status code='.concat(ex.status));
-        console.log('please, fix the apiKey of this user or set him as inactive');
-      } else {
-        console.error('[REDMINE] getAllAdditionalServiceObjects for timeEntryActivities failed with different reason than 403/401 response code!');
-      }
+      this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
       return false;
     }
 
@@ -529,5 +514,14 @@ export class RedmineSyncedService implements SyncedService {
       }
     }
     return mappingsObjectsResult;
+  }
+
+  handleResponseException(ex: any, functionInfo: string): void {
+    if (ex.status === 403 || ex.status === 401) {
+      console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
+      console.log('please, fix the apiKey of this user or set him as inactive');
+    } else {
+      console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+    }
   }
 }
