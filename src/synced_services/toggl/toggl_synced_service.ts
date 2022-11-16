@@ -151,12 +151,7 @@ export class TogglTrackSyncedService implements SyncedService {
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
     } catch (ex: any) {
-      if (ex.status === 403 || ex.status === 401) {
-          console.error('[TOGGL] getAllProjects failed with status code='.concat(ex.status));
-          console.log('please, fix the apiKey of this user or set him as inactive');
-      } else {
-        console.error('[TOGGL] getAllProjects failed with different reason than 403/401 response code!');
-      }
+      this.handleResponseException(ex, 'getAllProjects');
       return false;
     }
 
@@ -221,12 +216,7 @@ export class TogglTrackSyncedService implements SyncedService {
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
     } catch (ex: any) {
-      if (ex.status === 403 || ex.status === 401) {
-        console.error('[TOGGL] getAllTagss failed with status code='.concat(ex.status));
-        console.log('please, fix the apiKey of this user or set him as inactive');
-      } else {
-        console.error('[TOGGL] getAllTags failed with different reason than 403/401 response code!');
-      }
+      this.handleResponseException(ex, 'getAllTags');
       return false;
     }
 
@@ -305,12 +295,20 @@ export class TogglTrackSyncedService implements SyncedService {
     do {
       queryParams.page++;
 
-      const response = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-          .get(this._reportsUri)
-          .query(queryParams)
-          .auth(this._serviceDefinition.apiKey, 'api_token')
-      );
+      let response;
+
+      try {
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._reportsUri)
+                .query(queryParams)
+                .auth(this._serviceDefinition.apiKey, 'api_token')
+        );
+      } catch (ex: any) {
+        this.handleResponseException(ex, 'getTimeEntries')
+        return [];
+      }
+
 
       response.body?.data.forEach((timeEntry: never) => {
         entries.push(
@@ -347,12 +345,20 @@ export class TogglTrackSyncedService implements SyncedService {
 
     // time entries via reports (requesting only one object => do not paginate)
 
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .get(this._reportsUri)
-        .query(queryParams)
-        .auth(this._serviceDefinition.apiKey, 'api_token')
-    );
+    let response;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._reportsUri)
+              .query(queryParams)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+      );
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getTimeEntryById');
+      return null;
+    }
+
 
     response.body?.data.forEach((timeEntry: never) => {
       entries.push(
@@ -468,5 +474,14 @@ export class TogglTrackSyncedService implements SyncedService {
 
   getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null> {
     throw 'getTimeEntriesRelatedToMappingObject is not supported on Toggl service!'
+  }
+
+  handleResponseException(ex: any, functionInfo: string): void {
+    if (ex.status === 403 || ex.status === 401) {
+      console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
+      console.log('please, fix the apiKey of this user or set him as inactive');
+    } else {
+      console.error('[TOGGL] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+    }
   }
 }
