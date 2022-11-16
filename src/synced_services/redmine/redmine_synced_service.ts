@@ -517,7 +517,7 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
-    if (ex.status === 403 || ex.status === 401) {
+    if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
       console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
