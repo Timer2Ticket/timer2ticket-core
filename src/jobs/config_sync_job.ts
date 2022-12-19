@@ -23,7 +23,7 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
-    console.log('config_sync_job started for user '.concat(this._user.username));
+    console.log('[OMR] config_sync_job started for user '.concat(this._user.username));
     const primaryServiceDefinition: ServiceDefinition | undefined
       = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.isPrimary);
 
@@ -66,7 +66,6 @@ export class ConfigSyncJob extends SyncJob {
       );
     }
 
-    console.log('[OMR] -> som za initial setUpom');
     // Check primary objects and mappings, if something is wrong, fix it
     // Scenarios (based on objects from primary service):
     // a) Mapping is missing
@@ -116,8 +115,6 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
 
-    console.log('[OMR] -> som za checkom objectsToSync');
-
     // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
     const obsoleteMappings: Mapping[] = [];
     const now = new Date();
@@ -160,15 +157,11 @@ export class ConfigSyncJob extends SyncJob {
             operationsOk = false;
             console.error('Archive TESOs functionality is not yet supported for services other than Redmine!');
           } else {
-            console.log('[OMR] -> Obsoletes object service is Redmine!')
             const service = SyncedServiceCreator.create(primaryServiceDefinition)
-            console.log('[OMR] -> calling for relatedTimeEntriesFromApi')
             const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObject(mapping);
             if (!relatedTimeEntriesFromApi) {
               operationsOk = false;
-              console.error('[OMR] -> Failed GETing relatedTimeEntriesFromApi!');
             } else {
-              console.log('[OMR] -> relatedTimeEntriesFromApi returned with count='.concat(String(relatedTimeEntriesFromApi.length)));
               //bolo by vhodne mat vacsiu funkcionalitu, bud z pohladu pristupu na DB (getovanie TESO na zaklade api timeEntryID),
               // ako aj na urovni programu, hodilo by sa mat reusable funkciu, ktora dokaze getnut TESO pre timeEntry, podobne sa to vyuziva aj v time-entries-jobe
               const timeEntrySyncedObjectsFromDb = await databaseService.getTimeEntrySyncedObjects(this._user);
@@ -200,7 +193,7 @@ export class ConfigSyncJob extends SyncJob {
         operationsOk &&= await this._deleteMapping(mapping);
       }
 
-      console.log('Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs.'));
+      console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
         timeEntryToArchive.archived = true
         operationsOk &&= await databaseService.updateTimeEntrySyncedObject(timeEntryToArchive) !== null;
@@ -214,7 +207,6 @@ export class ConfigSyncJob extends SyncJob {
             mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping)
               === undefined);
     }
-    console.log('[OMR] -> som za obsoleteMappings removal');
 
     if (operationsOk) {
       // if all operations OK => set lastSuccessfullyDone (important to set not null for starting TE syncing)
