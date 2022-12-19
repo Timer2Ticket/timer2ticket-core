@@ -139,13 +139,28 @@ export class DatabaseService {
 
     const filterQuery = { _id: new ObjectId(timeEntrySyncedObject._id) };
 
-    if (timeEntrySyncedObject.archived !== undefined) {
-      console.log('[DEBUG] pred replaceOne, hodnota archived je='.concat(String(timeEntrySyncedObject.archived)))
-    } else {
-      console.log('[DEBUG] pred replaceOne, hodnota archived je undefined!')
-    }
     const result = await this._timeEntrySyncedObjectsCollection.replaceOne(filterQuery, timeEntrySyncedObject);
     return result.result.ok === 1 ? result.ops[0] : null;
+  }
+
+  async makeTimeEntrySyncedObjectArchived(timeEntrySyncedObject: TimeEntrySyncedObject): Promise<true | null> {
+    if (!this._timeEntrySyncedObjectsCollection) return null;
+
+    const filterQuery = { _id: new ObjectId(timeEntrySyncedObject._id) };
+
+    const result = await this._timeEntrySyncedObjectsCollection.updateOne(
+        filterQuery,
+        {
+          $set: {
+            archived: true,
+          },
+        },
+    );
+
+    console.log(
+        `${result.matchedCount} document(s) matched the filter, updated ${result.modifiedCount} document(s)`
+    );
+    return result.modifiedCount === 1 ? true : null;
   }
 
   async deleteTimeEntrySyncedObject(timeEntrySyncedObject: TimeEntrySyncedObject): Promise<boolean> {
