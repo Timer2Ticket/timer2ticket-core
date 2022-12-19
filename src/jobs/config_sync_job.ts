@@ -194,16 +194,7 @@ export class ConfigSyncJob extends SyncJob {
 
       console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
-        timeEntryToArchive.archived = true
-        console.log('[DEBUG] pred zavolanim update, hodnota archived='.concat(String(timeEntryToArchive.archived)))
-        const updateResponse = await databaseService.updateTimeEntrySyncedObject(timeEntryToArchive)
-        if (updateResponse === null) {
-          console.log('[DEBUG] po zavolani update, response je null!')
-        } else if (updateResponse.archived !== undefined) {
-          console.log('[DEBUG] po zavolani update, archived='.concat(String(updateResponse.archived)))
-        } else {
-          console.log('[DEBUG] po zavolani update, archived je undefined!')
-        }
+        const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
         operationsOk &&= updateResponse !== null;
       }
 
