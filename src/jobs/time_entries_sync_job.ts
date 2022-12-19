@@ -9,6 +9,7 @@ import { SyncedService } from "../synced_services/synced_service";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { MappingsObject } from "../models/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
+import {captureException} from "@sentry/node";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -149,7 +150,8 @@ export class TimeEntriesSyncJob extends SyncJob {
           }
         } catch (ex) {
           operationsOk = false;
-          console.error(ex);
+          captureException(ex);
+          //console.error(ex);
           console.error('err: TESyncJob: b), c), d), e); exception');
         }
       }
