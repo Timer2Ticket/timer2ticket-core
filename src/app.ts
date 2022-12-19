@@ -218,7 +218,7 @@ app.post('/api/scheduled/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Re
 });
 
 function scheduleJobs(user: User) {
-  console.log(`SCHEDULE jobs for user ${user._id}`);
+  console.log(`SCHEDULE jobs for user ${user.username} with id=${user._id}`);
 
   // cron schedule validation can be omitted (schedule is already validated when user - and schedule too - is updated)
   if (cron.validate(user.configSyncJobDefinition.schedule)) {

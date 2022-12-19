@@ -178,7 +178,6 @@ export class ConfigSyncJob extends SyncJob {
                         $object => $object.service === primaryServiceDefinition.name && $object.id === timeEntryFromApi.id) !== null;
                     //only one TESO connects to one timeEntry, we can break here to save time.
                     if (foundFlag) {
-                      timeEntrySyncedObjectFromDb.archived = true;
                       timeEntriesToArchive.push(timeEntrySyncedObjectFromDb)
                       break;
                     }
@@ -193,10 +192,19 @@ export class ConfigSyncJob extends SyncJob {
         operationsOk &&= await this._deleteMapping(mapping);
       }
 
-      console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user', this._user.username,'.'));
+      console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
         timeEntryToArchive.archived = true
-        operationsOk &&= await databaseService.updateTimeEntrySyncedObject(timeEntryToArchive) !== null;
+        console.log('[DEBUG] pred zavolanim update, hodnota archived='.concat(String(timeEntryToArchive.archived)))
+        const updateResponse = await databaseService.updateTimeEntrySyncedObject(timeEntryToArchive)
+        if (updateResponse === null) {
+          console.log('[DEBUG] po zavolani update, response je null!')
+        } else if (updateResponse.archived !== undefined) {
+          console.log('[DEBUG] po zavolani update, archived='.concat(String(updateResponse.archived)))
+        } else {
+          console.log('[DEBUG] po zavolani update, archived je undefined!')
+        }
+        operationsOk &&= updateResponse !== null;
       }
 
       // and remove all obsolete mappings from user's mappings
