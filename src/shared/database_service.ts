@@ -139,6 +139,11 @@ export class DatabaseService {
 
     const filterQuery = { _id: new ObjectId(timeEntrySyncedObject._id) };
 
+    if (timeEntrySyncedObject.archived !== undefined) {
+      console.log('[DEBUG] pred replaceOne, hodnota archived je='.concat(String(timeEntrySyncedObject.archived)))
+    } else {
+      console.log('[DEBUG] pred replaceOne, hodnota archived je undefined!')
+    }
     const result = await this._timeEntrySyncedObjectsCollection.replaceOne(filterQuery, timeEntrySyncedObject);
     return result.result.ok === 1 ? result.ops[0] : null;
   }
