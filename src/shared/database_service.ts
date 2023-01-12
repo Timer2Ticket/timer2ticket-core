@@ -146,7 +146,15 @@ export class DatabaseService {
   async makeTimeEntrySyncedObjectArchived(timeEntrySyncedObject: TimeEntrySyncedObject): Promise<true | null> {
     if (!this._timeEntrySyncedObjectsCollection) return null;
 
-    const filterQuery = { _id: new ObjectId(timeEntrySyncedObject._id) };
+    let tesoId;
+    if (timeEntrySyncedObject._id instanceof ObjectId) {
+      tesoId = timeEntrySyncedObject._id;
+      console.log('[ORM] tesoId je ObjectId s value='.concat(tesoId.str));
+    } else {
+      tesoId = new ObjectId(timeEntrySyncedObject._id);
+      console.log('[ORM] tesoId je string s value='.concat(tesoId));
+    }
+    const filterQuery = { _id: tesoId };
 
     const result = await this._timeEntrySyncedObjectsCollection.updateOne(
         filterQuery,
@@ -158,7 +166,7 @@ export class DatabaseService {
     );
 
     console.log(
-        `${result.matchedCount} document(s) matched the filter=${filterQuery.toString()}, updated ${result.modifiedCount} document(s)`
+        `${result.matchedCount} document(s) matched the filter _id=${tesoId.str}, updated ${result.modifiedCount} document(s)`
     );
     return result.modifiedCount === 1 ? true : null;
   }
