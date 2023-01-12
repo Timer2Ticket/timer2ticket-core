@@ -149,10 +149,10 @@ export class DatabaseService {
     let tesoId;
     if (timeEntrySyncedObject._id instanceof ObjectId) {
       tesoId = timeEntrySyncedObject._id;
-      console.log('[ORM] tesoId je ObjectId s value='.concat(tesoId.str));
+      console.log('[ORM] tesoId je ObjectId s value='.concat(tesoId.toHexString()));
     } else {
       tesoId = new ObjectId(timeEntrySyncedObject._id);
-      console.log('[ORM] tesoId je string s value='.concat(tesoId));
+      console.log('[ORM] tesoId je string s value='.concat(tesoId.toHexString()));
     }
     const filterQuery = { _id: tesoId };
 
@@ -166,7 +166,7 @@ export class DatabaseService {
     );
 
     console.log(
-        `${result.matchedCount} document(s) matched the filter _id=${tesoId.str}, updated ${result.modifiedCount} document(s)`
+        `${result.matchedCount} document(s) matched the filter _id=${tesoId.toHexString()}, updated ${result.modifiedCount} document(s)`
     );
     return result.modifiedCount === 1 ? true : null;
   }
