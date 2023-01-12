@@ -341,7 +341,7 @@ export class RedmineSyncedService implements SyncedService {
     let response;
 
     if (mapping.primaryObjectType !== "issue") {
-      throw 'getTimeEntriesRelatedToMappingObject supports only issues for now!'
+      throw 'getTimeEntriesRelatedToMappingObject supports only issues for now, called on: '.concat(<string>mapping.primaryObjectType, ' type with name=', mapping.name, '!')
     }
     try {
       console.log('[OMR] -> posielam request!');

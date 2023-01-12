@@ -10,6 +10,7 @@ import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import * as Sentry from '@sentry/node';
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -141,6 +142,12 @@ export class ConfigSyncJob extends SyncJob {
     if (obsoleteMappings.length > 0) {
       const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
       for (const mapping of obsoleteMappings) {
+        if (mapping.primaryObjectType !== 'issue') {
+          let message = 'OBSOLETE MAPPING SKIP -> typ: '.concat(<string>mapping.primaryObjectType, ' value: ', mapping.name, ' is marked to delete!');
+          console.log(message);
+          Sentry.captureMessage(message);
+          continue;
+        }
         //there is no explicit link between TESO and Mappings in the T2T DB
         //we deal with this problem by saving mappings primaryObjectId and its service.
         // With POId and service name, we get all the TimeEntries from API
