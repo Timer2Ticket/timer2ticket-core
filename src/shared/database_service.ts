@@ -152,13 +152,13 @@ export class DatabaseService {
         filterQuery,
         {
           $set: {
-            archived: true,
-          },
-        },
+            "archived": true
+          }
+        }
     );
 
     console.log(
-        `${result.matchedCount} document(s) matched the filter, updated ${result.modifiedCount} document(s)`
+        `${result.matchedCount} document(s) matched the filter=${filterQuery.toString()}, updated ${result.modifiedCount} document(s)`
     );
     return result.modifiedCount === 1 ? true : null;
   }
