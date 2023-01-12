@@ -166,7 +166,7 @@ export class DatabaseService {
     );
 
     console.log(
-        `${result.matchedCount} document(s) matched the filter _id=${timeEntrySyncedObject._id}, updated ${result.modifiedCount} document(s)`
+        `${result.matchedCount} document(s) matched the filter _id=${tesoId.str}, updated ${result.modifiedCount} document(s)`
     );
     return result.modifiedCount === 1 ? true : null;
   }
