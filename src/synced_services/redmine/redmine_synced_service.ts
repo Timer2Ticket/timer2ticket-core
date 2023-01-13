@@ -412,7 +412,7 @@ export class RedmineSyncedService implements SyncedService {
       totalCount = response.body?.total_count;
     } while (queryParams.offset < totalCount);
 
-    console.log('[OMR] -> vraciam entries z redmine_synced_service classy, count='.concat(entries.length.toString()));
+    console.log('[OMR] -> vraciam entries z redmine_synced_service classy, count='.concat(entries.length.toString(), ', totalCount=', totalCount.toString()));
 
     return entries;
   }
