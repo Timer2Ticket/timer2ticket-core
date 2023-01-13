@@ -180,6 +180,17 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
+  async getTimeEntrySyncedObjectForArchiving(steoId: number | string, serviceName: string, userIdInput: string | ObjectId): Promise<TimeEntrySyncedObject | null>
+  {
+    if (!this._timeEntrySyncedObjectsCollection) return null;
+
+    if (userIdInput instanceof String) {
+      userIdInput = new ObjectId(userIdInput);
+    }
+    const filterQuery = { "serviceTimeEntryObjects": { $elemMatch: { "id": steoId, "service": serviceName}}, "userId": userIdInput};
+    return this._timeEntrySyncedObjectsCollection.findOne(filterQuery);
+  }
+
   // ***********************************************************
   // JOB LOGS **************************************************
   // ***********************************************************
