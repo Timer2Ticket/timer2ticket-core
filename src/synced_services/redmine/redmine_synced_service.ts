@@ -10,6 +10,8 @@ import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Mapping } from "../../models/mapping/mapping";
 import { Constants } from "../../shared/constants";
 import { TimeEntrySyncedObject } from "../../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import {User} from "../../models/user";
+import * as Sentry from '@sentry/node';
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -19,7 +21,6 @@ export class RedmineSyncedService implements SyncedService {
   private _timeEntryActivitiesUri: string;
   private _timeEntriesUri: string;
   private _timeEntryUri: string;
-  private _timeEntriesOfIssueUri: string
 
   private _projectsType: string;
   private _issuesType: string;
@@ -39,7 +40,6 @@ export class RedmineSyncedService implements SyncedService {
     this._timeEntryActivitiesUri = `${serviceDefinition.config.apiPoint}enumerations/time_entry_activities.json`;
     this._timeEntriesUri = `${serviceDefinition.config.apiPoint}time_entries.json`;
     this._timeEntryUri = `${serviceDefinition.config.apiPoint}time_entries/[id].json`;
-    this._timeEntriesOfIssueUri = `${serviceDefinition.config.apiPoint}time_entries.json?issue_id=~[id]`;
 
     this._projectsType = 'project';
     this._issuesType = 'issue';
@@ -336,59 +336,83 @@ export class RedmineSyncedService implements SyncedService {
     );
   }
 
-  async getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null> {
+  async getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null> {
+    let totalCount = 0;
     console.log('[OMR] -> getTimeEntriesRelatedToMappingObject called!');
     let response;
 
     if (mapping.primaryObjectType !== "issue") {
-      throw 'getTimeEntriesRelatedToMappingObject supports only issues for now, called on: '.concat(<string>mapping.primaryObjectType, ' type with name=', mapping.name, '!')
-    }
-    try {
-      console.log('[OMR] -> posielam request!');
-      response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._timeEntriesOfIssueUri.replace('[id]', mapping.primaryObjectId.toString()))
-              .accept('application/json')
-              .type('application/json')
-              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
-    } catch (err: any) {
-      console.log('[OMR] -> chyteny error v response try - catch bloku!');
-      if (err && (err.status === 403 || err.status === 404)) {
-        return null;
-      } else {
-        throw err;
-      }
-    }
-
-    console.log('[OMR] -> pred response checkom!');
-    if (!response || !response.ok) {
+      console.log('getTimeEntriesRelatedToMappingObject supports only issues for now, called on: '.concat(<string>mapping.primaryObjectType, ' type with name=', mapping.name, '!'));
       return null;
     }
 
-    console.log('[OMR] -> response check bez problemov!');
+    let redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
+    if (typeof redmineServiceDefinition === 'undefined') {
+      console.log('Redmine service definition not found for user '.concat(user.username));
+      return null;
+    }
+
+    let redmineUserId = redmineServiceDefinition.config.userId;
+    console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
+
+    const queryParams: Record<string, any> = {
+      limit: 2,//TODO change after test,
+      offset: 0,
+      issue_id: mapping.primaryObjectId.toString(),
+      user_id: redmineUserId
+    }
+
     const entries: RedmineTimeEntry[] = [];
 
-    response.body['time_entries'].forEach((timeEntry: never) => {//TODO refactor to make it non-duplicated code
-      const durationInMilliseconds = timeEntry['hours'] * 60 * 60 * 1000;
-      const start = new Date(timeEntry['spent_on']);
-      const end = new Date(new Date(timeEntry['spent_on']).setMilliseconds(durationInMilliseconds));
+    do {
+      try {
+        console.log('[OMR] -> posielam request! s queryParams.offset='.concat(queryParams.offset.toString()));
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._timeEntriesUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        );
+      } catch (err: any) {
+        console.log('[OMR] -> chyteny error v response try - catch bloku!');
+        Sentry.captureException(err);
+        return null;
+      }
 
-      entries.push(
-          new RedmineTimeEntry(
-              timeEntry['id'],
-              timeEntry['project']['id'],
-              timeEntry['comments'],
-              start,
-              end,
-              durationInMilliseconds,
-              timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
-              timeEntry['activity']['id'],
-              new Date(timeEntry['updated_on']),
-          ),
-      );
-    });
-    console.log('[OMR] -> vraciam entries z redmine_synced_service classy!');
+      console.log('[OMR] -> pred response checkom!');
+      if (!response || !response.ok) {
+        return null;
+      }
+
+      console.log('[OMR] -> response check bez problemov!');
+
+      response.body['time_entries'].forEach((timeEntry: never) => {//TODO refactor to make it non-duplicated code
+        const durationInMilliseconds = timeEntry['hours'] * 60 * 60 * 1000;
+        const start = new Date(timeEntry['spent_on']);
+        const end = new Date(new Date(timeEntry['spent_on']).setMilliseconds(durationInMilliseconds));
+
+        entries.push(
+            new RedmineTimeEntry(
+                timeEntry['id'],
+                timeEntry['project']['id'],
+                timeEntry['comments'],
+                start,
+                end,
+                durationInMilliseconds,
+                timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
+                timeEntry['activity']['id'],
+                new Date(timeEntry['updated_on']),
+            ),
+        );
+      });
+
+      queryParams.offset += queryParams.limit;
+      totalCount = response.body?.total_count;
+    } while (queryParams.offset < totalCount);
+
+    console.log('[OMR] -> vraciam entries z redmine_synced_service classy, count='.concat(entries.length.toString(), ', totalCount=', totalCount.toString()));
 
     return entries;
   }

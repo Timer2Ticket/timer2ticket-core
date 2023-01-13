@@ -3,6 +3,7 @@ import { MappingsObject } from "../models/mapping/mappings_object";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import {User} from "../models/user";
 
 export interface SyncedService {
   /**
@@ -71,5 +72,5 @@ export interface SyncedService {
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[];
 
-  getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null>;
+  getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null>;
 }
