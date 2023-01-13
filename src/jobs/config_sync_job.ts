@@ -169,26 +169,14 @@ export class ConfigSyncJob extends SyncJob {
             if (!relatedTimeEntriesFromApi) {
               operationsOk = false;
             } else {
-              //bolo by vhodne mat vacsiu funkcionalitu, bud z pohladu pristupu na DB (getovanie TESO na zaklade api timeEntryID),
-              // ako aj na urovni programu, hodilo by sa mat reusable funkciu, ktora dokaze getnut TESO pre timeEntry, podobne sa to vyuziva aj v time-entries-jobe
-              const timeEntrySyncedObjectsFromDb = await databaseService.getTimeEntrySyncedObjects(this._user);
-              if (!timeEntrySyncedObjectsFromDb) {
-                operationsOk = false;
-                console.error('Failed getting TESOs from DB!');
-              } else {
-                //loop trough api time entries
-                for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
-                  //loop trough db timeEntrySyncedObjects
-                  for (const timeEntrySyncedObjectFromDb of timeEntrySyncedObjectsFromDb) {
-                    //search in TESOs STEOs
-                    const foundFlag = timeEntrySyncedObjectFromDb.serviceTimeEntryObjects.find(
-                        $object => $object.service === primaryServiceDefinition.name && $object.id === timeEntryFromApi.id) !== null;
-                    //only one TESO connects to one timeEntry, we can break here to save time.
-                    if (foundFlag) {
-                      timeEntriesToArchive.push(timeEntrySyncedObjectFromDb)
-                      break;
-                    }
-                  }
+              for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
+                const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, primaryObjectServiceName, this._user._id);
+                if (foundTESO == null) {
+                  console.log('Null returned from DB findOne!');
+                  operationsOk = false;
+                } else {
+                  console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
+                  timeEntriesToArchive.push(foundTESO);
                 }
               }
             }
