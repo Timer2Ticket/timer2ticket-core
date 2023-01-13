@@ -7,6 +7,7 @@ import { ServiceObject } from "../../models/synced_service/service_object/servic
 import { Mapping } from "../../models/mapping/mapping";
 import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
+import {User} from "../../models/user";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -472,7 +473,7 @@ export class TogglTrackSyncedService implements SyncedService {
     return mappingsObjectsResult;
   }
 
-  getTimeEntriesRelatedToMappingObject(mapping: Mapping): Promise<TimeEntry[] | null> {
+  getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null> {
     throw 'getTimeEntriesRelatedToMappingObject is not supported on Toggl service!'
   }
 

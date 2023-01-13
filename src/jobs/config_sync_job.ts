@@ -165,7 +165,7 @@ export class ConfigSyncJob extends SyncJob {
             console.error('Archive TESOs functionality is not yet supported for services other than Redmine!');
           } else {
             const service = SyncedServiceCreator.create(primaryServiceDefinition)
-            const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObject(mapping);
+            const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);
             if (!relatedTimeEntriesFromApi) {
               operationsOk = false;
             } else {
