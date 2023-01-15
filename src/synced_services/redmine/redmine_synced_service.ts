@@ -356,7 +356,7 @@ export class RedmineSyncedService implements SyncedService {
     console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
 
     const queryParams: Record<string, any> = {
-      limit: 2,//TODO change after test,
+      limit: this._responseLimit,
       offset: 0,
       issue_id: mapping.primaryObjectId.toString(),
       user_id: redmineUserId
