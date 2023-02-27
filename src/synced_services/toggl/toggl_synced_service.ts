@@ -16,7 +16,6 @@ export class TogglTrackSyncedService implements SyncedService {
   private _userUri: string;
   private _workspacesUri: string;
   private _timeEntriesUri: string;
-  private _reportsUri: string;
 
   private _projectsType: string;
   private _tagsType: string;
@@ -29,8 +28,7 @@ export class TogglTrackSyncedService implements SyncedService {
     this._baseUri = 'https://api.track.toggl.com/';
     this._userUri = `${this._baseUri}api/v9/me`;
     this._workspacesUri = `${this._baseUri}api/v9/workspaces`;
-    this._timeEntriesUri = `${this._baseUri}api/v8/time_entries`;
-    this._reportsUri = `${this._baseUri}reports/api/v2/details`;
+    this._timeEntriesUri = `${this._userUri}/time_entries`;
 
     this._projectsType = 'project';
     this._tagsType = 'tag';
@@ -276,103 +274,58 @@ export class TogglTrackSyncedService implements SyncedService {
   // ***********************************************************
 
   async getTimeEntries(start?: Date): Promise<TimeEntry[]> {
-    let totalCount = 0;
+    const end = new Date();
+    end.setFullYear(9999);
 
     const queryParams = {
-      since: start?.toISOString(),
-      workspace_id: this._serviceDefinition.config.workspace?.id,
-      user_ids: this._serviceDefinition.config.userId,
-      user_agent: 'Timer2Ticket',
-      page: 0,
+      start_date: start?.toISOString(),
+      end_date: end?.toISOString(),
     };
 
     const entries: TogglTimeEntry[] = [];
-
-    // time entries via reports (paginate)
-    do {
-      queryParams.page++;
-
-      let response;
-
-      try {
-        response = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._reportsUri)
-                .query(queryParams)
-                .auth(this._serviceDefinition.apiKey, 'api_token')
-        );
-      } catch (ex: any) {
-        this.handleResponseException(ex, 'getTimeEntries')
-        return [];
-      }
-
-
-      response.body?.data.forEach((timeEntry: never) => {
-        entries.push(
-          new TogglTimeEntry(
-            timeEntry['id'],
-            timeEntry['pid'],
-            timeEntry['description'],
-            new Date(timeEntry['start']),
-            new Date(timeEntry['end']),
-            timeEntry['dur'],
-            timeEntry['tags'],
-            new Date(timeEntry['updated']),
-          ),
-        );
-      });
-
-      totalCount = response.body?.total_count;
-    } while (queryParams.page * this._responseLimit < totalCount);
-
-    return entries;
-  }
-
-  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
-    const queryParams = {
-      time_entry_ids: id,
-      since: start?.toISOString(),
-      workspace_id: this._serviceDefinition.config.workspace?.id,
-      user_ids: this._serviceDefinition.config.userId,
-      user_agent: 'Timer2Ticket',
-      page: 0,
-    };
-
-    const entries: TogglTimeEntry[] = [];
-
-    // time entries via reports (requesting only one object => do not paginate)
 
     let response;
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
-              .get(this._reportsUri)
+              .get(this._timeEntriesUri)
               .query(queryParams)
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
     } catch (ex: any) {
-      this.handleResponseException(ex, 'getTimeEntryById');
-      return null;
+      this.handleResponseException(ex, 'getTimeEntries')
+      return [];
     }
 
 
-    response.body?.data.forEach((timeEntry: never) => {
-      entries.push(
-        new TogglTimeEntry(
-          timeEntry['id'],
-          timeEntry['pid'],
-          timeEntry['description'],
-          new Date(timeEntry['start']),
-          new Date(timeEntry['end']),
-          timeEntry['dur'],
-          timeEntry['tags'],
-          new Date(timeEntry['updated']),
-        ),
-      );
+    response.body?.forEach((timeEntry: never) => {
+      if(timeEntry['workspace_id'] === this._serviceDefinition.config.workspace?.id.toString()) {
+        entries.push(
+            new TogglTimeEntry(
+                timeEntry['id'],
+                timeEntry['project_id'],
+                timeEntry['description'],
+                new Date(timeEntry['start']),
+                new Date(timeEntry['stop']),
+                timeEntry['duration'] * 1000,
+                timeEntry['tags'],
+                new Date(timeEntry['at']),
+            ),
+        );
+      }
     });
 
-    return entries.length === 1 ? entries[0] : null;
+    return entries;
+  }
+
+  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
+
+    const entries = this.getTimeEntries(start);
+
+    const entry = (await entries).filter((entry: TimeEntry) => entry.id.toString() === id.toString());
+
+    return entry.length === 1 ? entry[0] : null;
   }
 
   async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
@@ -401,13 +354,14 @@ export class TogglTrackSyncedService implements SyncedService {
       description: text,
       tags: tags,
       created_with: 'Timer2Ticket',
+      wid: this._serviceDefinition.config.workspace?.id,
     };
 
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(this._timeEntriesUri)
+        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/time_entries`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ time_entry: timeEntryBody })
+        .send({ timeEntryBody })
     );
 
     if (!response.ok) {
@@ -415,21 +369,21 @@ export class TogglTrackSyncedService implements SyncedService {
     }
 
     return new TogglTimeEntry(
-      response.body.data['id'],
-      response.body.data['pid'],
-      response.body.data['description'],
-      new Date(response.body.data['start']),
-      new Date(response.body.data['stop']),
-      response.body.data['duration'] * 1000,
-      response.body.data['tags'],
-      new Date(response.body.data['at']),
+      response.body['id'],
+      response.body['pid'],
+      response.body['description'],
+      new Date(response.body['start']),
+      new Date(response.body['stop']),
+      response.body['duration'] * 1000,
+      response.body['tags'],
+      new Date(response.body['at']),
     );
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .delete(`${this._timeEntriesUri}/${id}`)
+        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/time_entries/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
