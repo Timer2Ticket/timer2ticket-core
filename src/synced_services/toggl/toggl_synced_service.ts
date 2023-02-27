@@ -15,8 +15,6 @@ export class TogglTrackSyncedService implements SyncedService {
   private _baseUri: string;
   private _userUri: string;
   private _workspacesUri: string;
-  private _projectsUri: string;
-  private _tagsUri: string;
   private _timeEntriesUri: string;
   private _reportsUri: string;
 
@@ -29,10 +27,8 @@ export class TogglTrackSyncedService implements SyncedService {
     this._serviceDefinition = serviceDefinition;
 
     this._baseUri = 'https://api.track.toggl.com/';
-    this._userUri = `${this._baseUri}api/v8/me`;
-    this._workspacesUri = `${this._baseUri}api/v8/workspaces`;
-    this._projectsUri = `${this._baseUri}api/v8/projects`;
-    this._tagsUri = `${this._baseUri}api/v8/tags`;
+    this._userUri = `${this._baseUri}api/v9/me`;
+    this._workspacesUri = `${this._baseUri}api/v9/workspaces`;
     this._timeEntriesUri = `${this._baseUri}api/v8/time_entries`;
     this._reportsUri = `${this._baseUri}reports/api/v2/details`;
 
@@ -174,20 +170,20 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _createProject(projectName: string): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(this._projectsUri)
+        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ project: { name: projectName, is_private: false, wid: this._serviceDefinition.config.workspace?.id } })
+        .send({ name: projectName, is_private: false, active: true })
     );
 
-    return new ServiceObject(response.body.data['id'], response.body.data['name'], this._projectsType);
+    return new ServiceObject(response.body['id'], response.body['name'], this._projectsType);
   }
 
   private async _updateProject(objectId: string | number, project: ServiceObject): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .put(`${this._projectsUri}/${objectId}`)
+        .put(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects/${objectId}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ project: { name: this.getFullNameForServiceObject(project) } })
+        .send({ name: this.getFullNameForServiceObject(project), active: true  })
     );
 
     return new ServiceObject(response.body.data['id'], response.body.data['name'], this._projectsType);
@@ -196,7 +192,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _deleteProject(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .delete(`${this._projectsUri}/${id}`)
+        .delete(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
@@ -246,29 +242,29 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _createTag(objectId: number, objectName: string, objectType: string): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(this._tagsUri)
+        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ tag: { name: this.getFullNameForServiceObject(new ServiceObject(objectId, objectName, objectType)), wid: this._serviceDefinition.config.workspace?.id } })
+        .send({ name: this.getFullNameForServiceObject(new ServiceObject(objectId, objectName, objectType)), workspace_id: this._serviceDefinition.config.workspace?.id })
     );
 
-    return new ServiceObject(response.body.data['id'], response.body.data['name'], this._tagsType);
+    return new ServiceObject(response.body['id'], response.body['name'], this._tagsType);
   }
 
   private async _updateTag(objectId: number | string, serviceObject: ServiceObject): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .put(`${this._tagsUri}/${objectId}`)
+        .put(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags/${objectId}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ tag: { name: this.getFullNameForServiceObject(serviceObject) } })
+        .send({ name: this.getFullNameForServiceObject(serviceObject) })
     );
 
-    return new ServiceObject(response.body.data['id'], response.body.data['name'], this._tagsType);
+    return new ServiceObject(response.body['id'], response.body['name'], this._tagsType);
   }
 
   private async _deleteTag(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .delete(`${this._tagsUri}/${id}`)
+        .delete(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
