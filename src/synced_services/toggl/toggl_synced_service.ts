@@ -8,6 +8,7 @@ import { Mapping } from "../../models/mapping/mapping";
 import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
+import * as Sentry from "@sentry/node";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -478,11 +479,20 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
+    const scope = new Sentry.Scope();
+    scope.setTag("Service", "Toggl");
+    scope.setContext("Service url", {url: this._timeEntriesUri})
+    scope.setContext("Exception", ex);
     if (ex != undefined && (ex.status === 403 || ex.status === 401) ) {
-      console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
-      console.log('please, fix the apiKey of this user or set him as inactive');
+      scope.setContext("Status code", ex.status);
+      Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), scope);
+      // console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
+      // console.log('please, fix the apiKey of this user or set him as inactive');
+      //TODO: save errors
     } else {
-      console.error('[TOGGL] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      //TODO: save errors
+      Sentry.captureException(' '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
   }
 }

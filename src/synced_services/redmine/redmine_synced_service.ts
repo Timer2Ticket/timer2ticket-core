@@ -12,7 +12,6 @@ import { Constants } from "../../shared/constants";
 import { TimeEntrySyncedObject } from "../../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {User} from "../../models/user";
 import * as Sentry from '@sentry/node';
-
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -70,12 +69,10 @@ export class RedmineSyncedService implements SyncedService {
     // call request but with chained retry
     const response = await request
       .retry(2, (err, res) => {
+
         if (res.status === 429) {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
-        } else if (res.status === 422) {
-          console.error(res.body.errors);
-          if (body) { console.error(body); }
         }
       });
 
@@ -338,22 +335,22 @@ export class RedmineSyncedService implements SyncedService {
 
   async getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null> {
     let totalCount = 0;
-    console.log('[OMR] -> getTimeEntriesRelatedToMappingObject called!');
+    //console.log('[OMR] -> getTimeEntriesRelatedToMappingObject called!');
     let response;
 
     if (mapping.primaryObjectType !== "issue") {
-      console.log('getTimeEntriesRelatedToMappingObject supports only issues for now, called on: '.concat(<string>mapping.primaryObjectType, ' type with name=', mapping.name, '!'));
+      //console.log('getTimeEntriesRelatedToMappingObject supports only issues for now, called on: '.concat(<string>mapping.primaryObjectType, ' type with name=', mapping.name, '!'));
       return null;
     }
 
     let redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
     if (typeof redmineServiceDefinition === 'undefined') {
-      console.log('Redmine service definition not found for user '.concat(user.username));
+      //console.log('Redmine service definition not found for user '.concat(user.username));
       return null;
     }
 
     let redmineUserId = redmineServiceDefinition.config.userId;
-    console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
+    //console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
 
     const queryParams: Record<string, any> = {
       limit: this._responseLimit,
@@ -366,7 +363,7 @@ export class RedmineSyncedService implements SyncedService {
 
     do {
       try {
-        console.log('[OMR] -> posielam request! s queryParams.offset='.concat(queryParams.offset.toString()));
+        //console.log('[OMR] -> posielam request! s queryParams.offset='.concat(queryParams.offset.toString()));
         response = await this._retryAndWaitInCaseOfTooManyRequests(
             superagent
                 .get(this._timeEntriesUri)
@@ -376,17 +373,17 @@ export class RedmineSyncedService implements SyncedService {
                 .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
         );
       } catch (err: any) {
-        console.log('[OMR] -> chyteny error v response try - catch bloku!');
+        //console.log('[OMR] -> chyteny error v response try - catch bloku!');
         Sentry.captureException(err);
         return null;
       }
 
-      console.log('[OMR] -> pred response checkom!');
+      //console.log('[OMR] -> pred response checkom!');
       if (!response || !response.ok) {
         return null;
       }
 
-      console.log('[OMR] -> response check bez problemov!');
+      //console.log('[OMR] -> response check bez problemov!');
 
       response.body['time_entries'].forEach((timeEntry: never) => {//TODO refactor to make it non-duplicated code
         const durationInMilliseconds = timeEntry['hours'] * 60 * 60 * 1000;
@@ -412,7 +409,7 @@ export class RedmineSyncedService implements SyncedService {
       totalCount = response.body?.total_count;
     } while (queryParams.offset < totalCount);
 
-    console.log('[OMR] -> vraciam entries z redmine_synced_service classy, count='.concat(entries.length.toString(), ', totalCount=', totalCount.toString()));
+    //console.log('[OMR] -> vraciam entries z redmine_synced_service classy, count='.concat(entries.length.toString(), ', totalCount=', totalCount.toString()));
 
     return entries;
   }
@@ -472,6 +469,19 @@ export class RedmineSyncedService implements SyncedService {
     );
 
     if (!response || !response.ok) {
+        if (response.status === 422) {
+          const scope = new Sentry.Scope();
+          //setting Service to redmine and adding context to know which redmine.
+          scope.setTag("Service", "Redmine");
+          scope.setContext("Service url", {url: this._timeEntriesUri})
+        //console.error(res.body.errors);
+        if (timeEntryBody) {
+          //console.error(body);
+          scope.setContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)))
+        }
+          //TODO: save errors
+          Sentry.captureException(response.body.errors, scope);
+      }
       return null;
     }
 
@@ -541,11 +551,20 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
+    const scope = new Sentry.Scope();
+    scope.setTag("Service", "Redmine");
+    scope.setContext("Service url", {url: this._timeEntriesUri})
+    scope.setContext("Exception", ex);
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
-      console.log('please, fix the apiKey of this user or set him as inactive');
+      //TODO: save errors
+      scope.setContext("Status code", ex.status);
+      Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), scope);
+      // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
+      // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      //TODO: save errors
+      Sentry.captureException(' '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
   }
 }

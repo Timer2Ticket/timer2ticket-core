@@ -10,6 +10,8 @@ import { ServiceObject } from "../models/synced_service/service_object/service_o
 import { MappingsObject } from "../models/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
+import * as Sentry from "@sentry/node";
+import {json} from "express";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -125,11 +127,18 @@ export class TimeEntriesSyncJob extends SyncJob {
             } else if (newTimeEntrySyncedObject === undefined) {
               // if undefined => error
               operationsOk = false;
-              console.error('err: TESyncJob: a); undefined');
+              captureException("TESyncJob: a); undefined");
+              //TODO add errors into syncedService then append into joblog here.
+
+              // console.error('err: TESyncJob: a); undefined');
             }
           } catch (ex) {
             operationsOk = false;
-            console.error('err: TESyncJob: a); exception');
+            Sentry.captureException(ex);
+
+            //TODO add errors into syncedService then append into joblog here.
+
+            // console.error('err: TESyncJob: a); exception');
           }
           // if null, TE is not meant to be synced
         }
@@ -145,14 +154,19 @@ export class TimeEntriesSyncJob extends SyncJob {
             const dbUpdateResult = await databaseService.updateTimeEntrySyncedObject(timeEntrySyncedObjectWrapper.timeEntrySyncedObject) !== null;
             operationsOk &&= dbUpdateResult;
             if (!dbUpdateResult) {
-              console.error('err: TESyncJob: b), c), d), e); DB update');
+              const scope = new Sentry.Scope();
+              scope.setContext("synced object", JSON.parse(JSON.stringify(timeEntrySyncedObjectWrapper.timeEntrySyncedObject)))
+              Sentry.captureException("Failed to update database");
+              // console.error('err: TESyncJob: b), c), d), e); DB update');
+              //TODO add errors into syncedService then append into joblog here.
             }
           }
         } catch (ex) {
           operationsOk = false;
+          //TODO add errors into syncedService then append into joblog here.
           captureException(ex);
           //console.error(ex);
-          console.error('err: TESyncJob: b), c), d), e); exception');
+          // console.error('err: TESyncJob: b), c), d), e); exception');
         }
       }
     }
@@ -266,7 +280,7 @@ export class TimeEntriesSyncJob extends SyncJob {
         // scenario b1) + possibly c) or e)
         // somewhere it is updated => need to update all other services
         // solution is: delete TEs from all other services and then propagate to scenario e) below
-        console.log('TESyncJob: b1)');
+        // console.log('TESyncJob: b1)');
 
         // loop through all STEOs (except that which TE is updated last)
         for (const serviceTimeEntryObjectWrapper of timeEntrySyncedObjectWrapper.serviceTimeEntryObjectWrappers) {
@@ -288,7 +302,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           // scenario e), STEO is there, but TE is missing (it could be both origin or non origin)
           // why it could be origin? Only from b1) above, if user deleted it himself, it would go to scenario d) below
           // need to create new TE (based on lastUpdatedServiceTimeEntryObjectWrapper.timeEntry)
-          console.log('TESyncJob: e)');
+          // console.log('TESyncJob: e)');
 
           // delete current STEO from the TESO
           const index = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.indexOf(serviceTimeEntryObjectWrapper.serviceTimeEntryObject);
@@ -311,7 +325,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           // service is missing (probably new one was added recently) => scenario c)
           // create new TE for given service, then create new STEO and add to TESO
           // TE should be created based on lastUpdatedServiceTimeEntryObjectWrapper.timeEntry
-          console.log('TESyncJob: c)');
+          // console.log('TESyncJob: c)');
 
           await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
             otherServicesMappingsObjects,
@@ -331,13 +345,14 @@ export class TimeEntriesSyncJob extends SyncJob {
       // not found, delete
       if (!originTimeEntry) {
         // scenario d)
-        console.log('TESyncJob: d)');
+        // console.log('TESyncJob: d)');
         let allDeleted = true;
         for (const serviceTimeEntryObjectWrapper of timeEntrySyncedObjectWrapper.serviceTimeEntryObjectWrappers) {
           // not from origin (TE is already not there) and not if TE already does not exist in the service
           if (serviceTimeEntryObjectWrapper !== originServiceTimeEntryObjectWrapper && serviceTimeEntryObjectWrapper.timeEntry) {
             allDeleted &&= await serviceTimeEntryObjectWrapper.syncedService.deleteTimeEntry(serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id);
-            console.log(`TESyncJob: deleted TE from the ${serviceTimeEntryObjectWrapper.serviceDefinition.name} with id = ${serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id}`);
+            // TODO: Check this console message if needed
+            //console.log(`TESyncJob: deleted TE from the ${serviceTimeEntryObjectWrapper.serviceDefinition.name} with id = ${serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id}`);
           }
         }
         if (allDeleted) {
