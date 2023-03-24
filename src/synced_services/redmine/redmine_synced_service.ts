@@ -12,6 +12,7 @@ import { Constants } from "../../shared/constants";
 import { TimeEntrySyncedObject } from "../../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {User} from "../../models/user";
 import * as Sentry from '@sentry/node';
+import {Error} from "../../models/error";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -27,6 +28,7 @@ export class RedmineSyncedService implements SyncedService {
 
   private _responseLimit: number;
 
+  public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
     if (serviceDefinition.config.apiPoint === null) {
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
@@ -45,6 +47,8 @@ export class RedmineSyncedService implements SyncedService {
     this._timeEntryActivitiesType = 'activity';
 
     this._responseLimit = 50;
+
+    this.errors = [];
   }
 
   /**
@@ -470,16 +474,20 @@ export class RedmineSyncedService implements SyncedService {
 
     if (!response || !response.ok) {
         if (response.status === 422) {
+          const error = new Error();
           const scope = new Sentry.Scope();
           //setting Service to redmine and adding context to know which redmine.
           scope.setTag("Service", "Redmine");
           scope.setContext("Service url", {url: this._timeEntriesUri})
+          error.service = "Redmine";
+          error.exception = response.body.errors;
         //console.error(res.body.errors);
         if (timeEntryBody) {
           //console.error(body);
           scope.setContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)))
+          error.data = JSON.parse(JSON.stringify(timeEntryBody));
         }
-          //TODO: save errors
+          this.errors.push(error);
           Sentry.captureException(response.body.errors, scope);
       }
       return null;
@@ -551,20 +559,26 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
+    const error = new Error();
     const scope = new Sentry.Scope();
     scope.setTag("Service", "Redmine");
     scope.setContext("Service url", {url: this._timeEntriesUri})
     scope.setContext("Exception", ex);
+
+    error.service = "Redmine";
+    error.exception = ex;
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      //TODO: save errors
       scope.setContext("Status code", ex.status);
       Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), scope);
+      error.data ="API key error. Please check if you API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      //TODO: save errors
-      Sentry.captureException(' '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      Sentry.captureException(''.concat(functionInfo, ' failed with different reason than 403/401 response code!'), scope);
+      // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
+
+    this.errors.push(error)
   }
 }

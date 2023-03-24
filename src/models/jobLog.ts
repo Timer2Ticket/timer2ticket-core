@@ -14,7 +14,7 @@ export class JobLog {
   started: number | null;
   completed: number | null;
   // currently not used
-  errors: [];
+  errors: Array<any>;
 
   constructor(userId: string | ObjectId, type: string, origin: string) {
     this.userId = userId;

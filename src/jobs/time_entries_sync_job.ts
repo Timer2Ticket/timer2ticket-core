@@ -127,17 +127,12 @@ export class TimeEntriesSyncJob extends SyncJob {
             } else if (newTimeEntrySyncedObject === undefined) {
               // if undefined => error
               operationsOk = false;
-              captureException("TESyncJob: a); undefined");
-              //TODO add errors into syncedService then append into joblog here.
-
+              captureException("TESyncJob: a); undefined - database sync failed");
               // console.error('err: TESyncJob: a); undefined');
             }
           } catch (ex) {
             operationsOk = false;
             Sentry.captureException(ex);
-
-            //TODO add errors into syncedService then append into joblog here.
-
             // console.error('err: TESyncJob: a); exception');
           }
           // if null, TE is not meant to be synced
@@ -158,12 +153,10 @@ export class TimeEntriesSyncJob extends SyncJob {
               scope.setContext("synced object", JSON.parse(JSON.stringify(timeEntrySyncedObjectWrapper.timeEntrySyncedObject)))
               Sentry.captureException("Failed to update database");
               // console.error('err: TESyncJob: b), c), d), e); DB update');
-              //TODO add errors into syncedService then append into joblog here.
             }
           }
         } catch (ex) {
           operationsOk = false;
-          //TODO add errors into syncedService then append into joblog here.
           captureException(ex);
           //console.error(ex);
           // console.error('err: TESyncJob: b), c), d), e); exception');
@@ -410,7 +403,8 @@ export class TimeEntriesSyncJob extends SyncJob {
       ));
     }
 
-    const createdTimeEntry = await SyncedServiceCreator.create(serviceDefinition).createTimeEntry(
+    const service = SyncedServiceCreator.create(serviceDefinition);
+    const createdTimeEntry = await service.createTimeEntry(
       timeEntryModel.durationInMilliseconds,
       new Date(timeEntryModel.start),
       new Date(timeEntryModel.end),
@@ -427,6 +421,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
 
+      this._jobLog.errors.push(service.errors)
       return createdTimeEntry;
     }
 

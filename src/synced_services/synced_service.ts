@@ -6,6 +6,9 @@ import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_
 import {User} from "../models/user";
 
 export interface SyncedService {
+
+   errors: Array<any>;
+
   /**
    * Get all service objects which: projects, issues, activities etc.
    * returns false in case of

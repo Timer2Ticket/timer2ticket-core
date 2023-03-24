@@ -3,7 +3,7 @@ import { User } from "../models/user";
 
 export abstract class SyncJob {
   protected _user: User;
-  private _jobLog: JobLog;
+  protected _jobLog: JobLog;
 
   constructor(user: User, jobLog: JobLog) {
     this._user = user;
