@@ -15,7 +15,11 @@ export class TogglTrackSyncedService implements SyncedService {
   private _baseUri: string;
   private _userUri: string;
   private _workspacesUri: string;
-  private _timeEntriesUri: string;
+  private _workspacesTimeEntriesUri: string;
+  private _meTimeEntriesUri: string;
+  private _projectsUri: string;
+  private _tagsUri: string;
+  private _searchUri: string;
 
   private _projectsType: string;
   private _tagsType: string;
@@ -28,7 +32,11 @@ export class TogglTrackSyncedService implements SyncedService {
     this._baseUri = 'https://api.track.toggl.com/';
     this._userUri = `${this._baseUri}api/v9/me`;
     this._workspacesUri = `${this._baseUri}api/v9/workspaces`;
-    this._timeEntriesUri = `${this._userUri}/time_entries`;
+    this._workspacesTimeEntriesUri = `${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/time_entries`;
+    this._meTimeEntriesUri = `${this._userUri}/time_entries`;
+    this._projectsUri = `${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`;
+    this._tagsUri = `${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`;
+    this._searchUri = `${this._baseUri}reports/api/v3/workspace/${this._serviceDefinition.config.workspace?.id}/search/time_entries`;
 
     this._projectsType = 'project';
     this._tagsType = 'tag';
@@ -142,7 +150,7 @@ export class TogglTrackSyncedService implements SyncedService {
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
-              .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`)
+              .get(this._projectsUri)
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
     } catch (ex: any) {
@@ -168,7 +176,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _createProject(projectName: string): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`)
+        .post(this._projectsUri)
         .auth(this._serviceDefinition.apiKey, 'api_token')
         .send({ name: projectName, is_private: false, active: true })
     );
@@ -179,18 +187,18 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _updateProject(objectId: string | number, project: ServiceObject): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .put(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects/${objectId}`)
+        .put(`${this._projectsUri}/${objectId}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
         .send({ name: this.getFullNameForServiceObject(project), active: true  })
     );
 
-    return new ServiceObject(response.body.data['id'], response.body.data['name'], this._projectsType);
+    return new ServiceObject(response.body['id'], response.body['name'], this._projectsType);
   }
 
   private async _deleteProject(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .delete(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects/${id}`)
+        .delete(`${this._projectsUri}/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
@@ -207,7 +215,7 @@ export class TogglTrackSyncedService implements SyncedService {
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
-              .get(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`)
+              .get(this._tagsUri)
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
     } catch (ex: any) {
@@ -240,7 +248,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _createTag(objectId: number, objectName: string, objectType: string): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`)
+        .post(this._tagsUri)
         .auth(this._serviceDefinition.apiKey, 'api_token')
         .send({ name: this.getFullNameForServiceObject(new ServiceObject(objectId, objectName, objectType)), workspace_id: this._serviceDefinition.config.workspace?.id })
     );
@@ -251,7 +259,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _updateTag(objectId: number | string, serviceObject: ServiceObject): Promise<ServiceObject> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .put(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags/${objectId}`)
+        .put(`${this._tagsUri}/${objectId}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
         .send({ name: this.getFullNameForServiceObject(serviceObject) })
     );
@@ -262,7 +270,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private async _deleteTag(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .delete(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags/${id}`)
+        .delete(`${this._tagsUri}/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
@@ -289,7 +297,7 @@ export class TogglTrackSyncedService implements SyncedService {
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
-              .get(this._timeEntriesUri)
+              .get(this._meTimeEntriesUri)
               .query(queryParams)
               .auth(this._serviceDefinition.apiKey, 'api_token')
       );
@@ -300,7 +308,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
 
     response.body?.forEach((timeEntry: never) => {
-      if(timeEntry['workspace_id'] === this._serviceDefinition.config.workspace?.id.toString()) {
+      if(timeEntry['workspace_id'] === this._serviceDefinition.config.workspace?.id) {
         entries.push(
             new TogglTimeEntry(
                 timeEntry['id'],
@@ -320,12 +328,67 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
+    const end = new Date(start!);
+    end.setDate(end.getDate() + 364); // Max time range is 365 days
 
-    const entries = this.getTimeEntries(start);
+    const queryParams = {
+      time_entry_ids: [id],
+      start_date: start?.toISOString().slice(0, 10), // format YYYY-MM-DD
+      end_date: end.toISOString().slice(0, 10), // format YYYY-MM-DD
+    };
 
-    const entry = (await entries).filter((entry: TimeEntry) => entry.id.toString() === id.toString());
+    const entries: TogglTimeEntry[] = [];
 
-    return entry.length === 1 ? entry[0] : null;
+    let response;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .post(this._searchUri)
+          .auth(this._serviceDefinition.apiKey, 'api_token')
+          .send(queryParams)
+      );
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getTimeEntryById');
+      return null;
+    }
+
+    const allTags: ServiceObject[] = await this._getAllTags() as ServiceObject[];
+
+    response.body.forEach((timeEntryInfo: never) => {
+      const timeEntries: never[] = timeEntryInfo['time_entries'];
+      if (!timeEntries || timeEntries.length === 0) {
+        return null;
+      }
+      const timeEntry = timeEntries[0];
+
+      const timeEntryIds: number[] = (timeEntryInfo['tag_ids']);
+
+      const tags: string[] = [];
+      timeEntryIds.forEach((tagId: number) => {
+        const foundTag = allTags.find((t) => t.id === tagId);
+        if (foundTag) {
+          tags.push(foundTag.name);
+        }
+      });
+
+      const entry = new TogglTimeEntry(
+        timeEntry['id'],
+        timeEntryInfo['project_id'],
+        timeEntryInfo['description'],
+        new Date(timeEntry['start']),
+        new Date(timeEntry['stop']),
+        timeEntry['seconds'] * 1000,
+        tags,
+        new Date(timeEntry['at']),
+      );
+
+      entries.push(
+          entry
+      );
+    });
+
+    return entries.length === 1 ? entries[0] : null;
   }
 
   async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
@@ -359,9 +422,9 @@ export class TogglTrackSyncedService implements SyncedService {
 
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/time_entries`)
+        .post(this._workspacesTimeEntriesUri)
         .auth(this._serviceDefinition.apiKey, 'api_token')
-        .send({ timeEntryBody })
+        .send(timeEntryBody)
     );
 
     if (!response.ok) {
@@ -383,7 +446,7 @@ export class TogglTrackSyncedService implements SyncedService {
   async deleteTimeEntry(id: string | number): Promise<boolean> {
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
       superagent
-        .post(`${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/time_entries/${id}`)
+        .delete(`${this._workspacesTimeEntriesUri}/${id}`)
         .auth(this._serviceDefinition.apiKey, 'api_token')
     );
 
