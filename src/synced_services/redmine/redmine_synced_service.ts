@@ -13,6 +13,7 @@ import { TimeEntrySyncedObject } from "../../models/synced_service/time_entry_sy
 import {User} from "../../models/user";
 import * as Sentry from '@sentry/node';
 import {Error} from "../../models/error";
+import {Scope} from "@sentry/node";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -27,6 +28,8 @@ export class RedmineSyncedService implements SyncedService {
   private _timeEntryActivitiesType: string;
 
   private _responseLimit: number;
+
+  private readonly sentryScope: Sentry.Scope;
 
   public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
@@ -47,6 +50,10 @@ export class RedmineSyncedService implements SyncedService {
     this._timeEntryActivitiesType = 'activity';
 
     this._responseLimit = 50;
+
+    this.sentryScope = new Scope();
+    this.sentryScope.setTag("Service", "Redmine");
+    this.sentryScope.setContext("Service url", {url: this._timeEntriesUri});
 
     this.errors = [];
   }
@@ -475,20 +482,20 @@ export class RedmineSyncedService implements SyncedService {
     if (!response || !response.ok) {
         if (response.status === 422) {
           const error = new Error();
-          const scope = new Sentry.Scope();
-          //setting Service to redmine and adding context to know which redmine.
-          scope.setTag("Service", "Redmine");
-          scope.setContext("Service url", {url: this._timeEntriesUri})
+
           error.service = "Redmine";
           error.exception = response.body.errors;
         //console.error(res.body.errors);
         if (timeEntryBody) {
           //console.error(body);
-          scope.setContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)))
+          this.sentryScope.setContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)))
           error.data = JSON.parse(JSON.stringify(timeEntryBody));
         }
           this.errors.push(error);
-          Sentry.captureException(response.body.errors, scope);
+          Sentry.captureException(response.body.errors, this.sentryScope);
+
+          //need to clear context so it is not passed into other errors
+          this.sentryScope.setContext("Time entry", null);
       }
       return null;
     }
@@ -560,25 +567,24 @@ export class RedmineSyncedService implements SyncedService {
 
   handleResponseException(ex: any, functionInfo: string): void {
     const error = new Error();
-    const scope = new Sentry.Scope();
-    scope.setTag("Service", "Redmine");
-    scope.setContext("Service url", {url: this._timeEntriesUri})
-    scope.setContext("Exception", ex);
 
+    this.sentryScope.setContext("Exception", ex);
     error.service = "Redmine";
     error.exception = ex;
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      scope.setContext("Status code", ex.status);
-      Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), scope);
+      this.sentryScope.setContext("Status code", ex.status);
+      Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), this.sentryScope);
       error.data ="API key error. Please check if you API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      Sentry.captureException(''.concat(functionInfo, ' failed with different reason than 403/401 response code!'), scope);
+      Sentry.captureException(''.concat(functionInfo, ' failed with different reason than 403/401 response code!'), this.sentryScope);
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
-
+    //need to clear context, so it is not passed into other errors
+    this.sentryScope.setContext("Exception", null);
+    this.sentryScope.setContext("Status code", null);
     this.errors.push(error)
   }
 }

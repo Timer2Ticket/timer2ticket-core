@@ -499,10 +499,11 @@ export class TogglTrackSyncedService implements SyncedService {
       // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
       //TODO validate if this should be sent to user FE
+
       // error.data = ''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive');
       Sentry.captureException(''.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
-    this.errors?.push(error);
+    this.errors.push(error);
   }
 }

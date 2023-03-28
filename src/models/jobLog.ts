@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { databaseService } from "../shared/database_service";
+import {Error} from "./error";
 
 export class JobLog {
   _id!: string | ObjectId;
@@ -14,7 +15,7 @@ export class JobLog {
   started: number | null;
   completed: number | null;
   // currently not used
-  errors: Array<any>;
+  errors: Array<Error>;
 
   constructor(userId: string | ObjectId, type: string, origin: string) {
     this.userId = userId;

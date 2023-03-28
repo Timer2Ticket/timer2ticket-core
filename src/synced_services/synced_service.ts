@@ -2,12 +2,12 @@ import { Mapping } from "../models/mapping/mapping";
 import { MappingsObject } from "../models/mapping/mappings_object";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
-import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {User} from "../models/user";
+import {Error} from "../models/error";
 
 export interface SyncedService {
 
-   errors: Array<any>;
+   errors: Array<Error>;
 
   /**
    * Get all service objects which: projects, issues, activities etc.
