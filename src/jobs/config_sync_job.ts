@@ -146,6 +146,7 @@ export class ConfigSyncJob extends SyncJob {
           let message = 'OBSOLETE MAPPING SKIP -> typ: '.concat(<string>mapping.primaryObjectType, ' value: ', mapping.name, ' is marked to delete!');
           console.log(message);
           Sentry.captureMessage(message);
+          operationsOk &&= await this._deleteMapping(mapping);
           continue;
         }
         //there is no explicit link between TESO and Mappings in the T2T DB
