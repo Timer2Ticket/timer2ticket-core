@@ -424,7 +424,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       this._jobLog.errors.push(service.errors)
       return createdTimeEntry;
     }
-
+    this._jobLog.errors.push(service.errors)
     return undefined;
   }
 
