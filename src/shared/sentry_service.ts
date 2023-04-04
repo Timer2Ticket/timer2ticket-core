@@ -3,7 +3,7 @@ import * as Sentry from '@sentry/node';
 import {TimeEntry} from "../models/synced_service/time_entry/time_entry";
 import {ExtraContext} from "../models/extra_context";
 export class SentryService {
-    public logRedmineError(uri: string, error: any, extraContext?: ExtraContext | ExtraContext[]): void {
+    public logRedmineError(uri: string, error: any, extraContext?: ExtraContext | ExtraContext[] | null): void {
         const sentryScope = new Scope();
         sentryScope.setTag("Service", "Redmine");
         sentryScope.setContext("Service url", {url: uri});
@@ -15,10 +15,9 @@ export class SentryService {
         Sentry.captureException(error, sentryScope);
     }
 
-    public logTogglError(uri: string, error: any, extraContext?: ExtraContext | ExtraContext[]): void {
+    public logTogglError(error: any, extraContext?: ExtraContext | ExtraContext[] | null): void {
         const sentryScope = new Scope();
         sentryScope.setTag("Service", "Toggl");
-        sentryScope.setContext("Service url", {url: uri});
 
         if (extraContext) {
             this.addExtraContext(sentryScope, extraContext);
@@ -27,7 +26,7 @@ export class SentryService {
         Sentry.captureException(error, sentryScope);
     }
 
-    public logError(error: any, extraContext?: ExtraContext | ExtraContext[]): void {
+    public logError(error: any, extraContext?: ExtraContext | ExtraContext[] | null): void {
         const sentryScope = new Scope();
 
         if (extraContext) {

@@ -9,11 +9,10 @@ import { Utilities } from "../../shared/utilities";
 import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Mapping } from "../../models/mapping/mapping";
 import { Constants } from "../../shared/constants";
-import { TimeEntrySyncedObject } from "../../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {User} from "../../models/user";
-import * as Sentry from '@sentry/node';
 import {Error} from "../../models/error";
-import {Scope} from "@sentry/node";
+import {SentryService} from "../../shared/sentry_service";
+import {ExtraContext} from "../../models/extra_context";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -29,7 +28,7 @@ export class RedmineSyncedService implements SyncedService {
 
   private _responseLimit: number;
 
-  private readonly sentryScope: Sentry.Scope;
+  private _sentryService: SentryService
 
   public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
@@ -50,10 +49,7 @@ export class RedmineSyncedService implements SyncedService {
     this._timeEntryActivitiesType = 'activity';
 
     this._responseLimit = 50;
-
-    this.sentryScope = new Scope();
-    this.sentryScope.setTag("Service", "Redmine");
-    this.sentryScope.setContext("Service url", {url: this._timeEntriesUri});
+    this._sentryService = new SentryService();
 
     this.errors = [];
   }
@@ -385,7 +381,7 @@ export class RedmineSyncedService implements SyncedService {
         );
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
-        Sentry.captureException(err);
+        this._sentryService.logRedmineError(this._projectsUri, err)
         return null;
       }
 
@@ -486,16 +482,16 @@ export class RedmineSyncedService implements SyncedService {
           error.service = "Redmine";
           error.exception = response.body.errors;
         //console.error(res.body.errors);
-        if (timeEntryBody) {
+          let context = null;
+          if (timeEntryBody) {
           //console.error(body);
-          this.sentryScope.setContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)))
+           context = new ExtraContext()
+          context.name = "Time entry";
+          context.context = JSON.parse(JSON.stringify(timeEntryBody))
           error.data = JSON.parse(JSON.stringify(timeEntryBody));
         }
           this.errors.push(error);
-          Sentry.captureException(response.body.errors, this.sentryScope);
-
-          //need to clear context so it is not passed into other errors
-          this.sentryScope.setContext("Time entry", null);
+          this._sentryService.logRedmineError(this._projectsUri, response.body.errors, context)
       }
       return null;
     }
@@ -567,24 +563,36 @@ export class RedmineSyncedService implements SyncedService {
 
   handleResponseException(ex: any, functionInfo: string): void {
     const error = new Error();
-
-    this.sentryScope.setContext("Exception", ex);
     error.service = "Redmine";
-    error.exception = ex;
+
+
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      this.sentryScope.setContext("Status code", ex.status);
-      Sentry.captureException(''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive'), this.sentryScope);
+      error.exception = ex;
+
+      const context =  []
+      const c1 = new ExtraContext();
+      c1.name = "Exception"
+      c1.context = ex;
+
+      context.push(c1)
+
+      const c2 = new ExtraContext();
+      c2.name = "Status code"
+      c2.context = ex.status;
+      context.push(c2)
+
+      const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
+      this._sentryService.logRedmineError(this._projectsUri, message , context)
       error.data ="API key error. Please check if you API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      Sentry.captureException(''.concat(functionInfo, ' failed with different reason than 403/401 response code!'), this.sentryScope);
+
+      const message = `${functionInfo} failed with different reason than 403/401 response code!`
+      this._sentryService.logRedmineError(this._projectsUri, message , context)
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
-    //need to clear context, so it is not passed into other errors
-    this.sentryScope.setContext("Exception", null);
-    this.sentryScope.setContext("Status code", null);
     this.errors.push(error)
   }
 }
