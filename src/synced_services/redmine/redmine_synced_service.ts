@@ -12,6 +12,7 @@ import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
 import {Error} from "../../models/error";
 import {SentryService} from "../../shared/sentry_service";
+import {ErrorService} from "../../shared/Error_service";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -28,6 +29,7 @@ export class RedmineSyncedService implements SyncedService {
   private _responseLimit: number;
 
   private _sentryService: SentryService
+  private _errorService: ErrorService
 
   public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
@@ -49,6 +51,7 @@ export class RedmineSyncedService implements SyncedService {
 
     this._responseLimit = 50;
     this._sentryService = new SentryService();
+    this._errorService = new ErrorService();
 
     this.errors = [];
   }
@@ -476,10 +479,7 @@ export class RedmineSyncedService implements SyncedService {
 
     if (!response || !response.ok) {
         if (response.status === 422) {
-          const error = new Error();
-
-          error.service = "Redmine";
-          error.exception = response.body.errors;
+          const error = this._errorService.createRedmineError(response.body.errors);
         //console.error(res.body.errors);
           let context = null;
           if (timeEntryBody) {
@@ -559,13 +559,11 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
-    const error = new Error();
-    error.service = "Redmine";
+
 
 
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      error.exception = ex;
-
+      const error = this._errorService.createRedmineError(ex);
       const context =  [
         this._sentryService.createExtraContext("Exception", ex),
         this._sentryService.createExtraContext("Status code", ex.status)
@@ -573,16 +571,18 @@ export class RedmineSyncedService implements SyncedService {
 
       const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
       this._sentryService.logRedmineError(this._projectsUri, message , context)
-      error.data ="API key error. Please check if you API key is correct";
+      error.data ="API key error. Please check if your API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
+      this.errors.push(error)
     } else {
+      //TODO validate if this should be sent to user FE
 
       const message = `${functionInfo} failed with different reason than 403/401 response code!`
       this._sentryService.logRedmineError(this._projectsUri, message)
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
-    this.errors.push(error)
+
   }
 }
