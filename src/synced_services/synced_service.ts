@@ -4,10 +4,12 @@ import { ServiceObject } from "../models/synced_service/service_object/service_o
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 import {User} from "../models/user";
 import {Error} from "../models/error";
+import {SentryService} from "../shared/sentry_service";
 
 export interface SyncedService {
 
    errors: Array<Error>;
+  readonly _sentryService: SentryService
 
   /**
    * Get all service objects which: projects, issues, activities etc.

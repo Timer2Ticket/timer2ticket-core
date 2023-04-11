@@ -12,7 +12,6 @@ import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
 import {Error} from "../../models/error";
 import {SentryService} from "../../shared/sentry_service";
-import {ExtraContext} from "../../models/extra_context";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -485,10 +484,8 @@ export class RedmineSyncedService implements SyncedService {
           let context = null;
           if (timeEntryBody) {
           //console.error(body);
-           context = new ExtraContext()
-          context.name = "Time entry";
-          context.context = JSON.parse(JSON.stringify(timeEntryBody))
-          error.data = JSON.parse(JSON.stringify(timeEntryBody));
+            context = this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)));
+            error.data = JSON.parse(JSON.stringify(timeEntryBody));
         }
           this.errors.push(error);
           this._sentryService.logRedmineError(this._projectsUri, response.body.errors, context)
@@ -569,17 +566,10 @@ export class RedmineSyncedService implements SyncedService {
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
       error.exception = ex;
 
-      const context =  []
-      const c1 = new ExtraContext();
-      c1.name = "Exception"
-      c1.context = ex;
-
-      context.push(c1)
-
-      const c2 = new ExtraContext();
-      c2.name = "Status code"
-      c2.context = ex.status;
-      context.push(c2)
+      const context =  [
+        this._sentryService.createExtraContext("Exception", ex),
+        this._sentryService.createExtraContext("Status code", ex.status)
+      ]
 
       const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
       this._sentryService.logRedmineError(this._projectsUri, message , context)
@@ -589,7 +579,7 @@ export class RedmineSyncedService implements SyncedService {
     } else {
 
       const message = `${functionInfo} failed with different reason than 403/401 response code!`
-      this._sentryService.logRedmineError(this._projectsUri, message , context)
+      this._sentryService.logRedmineError(this._projectsUri, message)
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }

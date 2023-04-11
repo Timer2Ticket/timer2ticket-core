@@ -11,7 +11,6 @@ import { MappingsObject } from "../models/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
-import {json} from "express";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -421,10 +420,10 @@ export class TimeEntriesSyncJob extends SyncJob {
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
 
-      this._jobLog.errors.push(service.errors)
+      this._jobLog.errors.concat(service.errors)
       return createdTimeEntry;
     }
-    this._jobLog.errors.push(service.errors)
+    this._jobLog.errors.concat(service.errors)
     return undefined;
   }
 
