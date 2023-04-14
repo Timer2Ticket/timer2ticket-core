@@ -10,7 +10,7 @@ import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
 import {Error} from "../../models/error";
 import {SentryService} from "../../shared/sentry_service";
-import {ErrorService} from "../../shared/Error_service";
+import {ErrorService} from "../../shared/error_service";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;

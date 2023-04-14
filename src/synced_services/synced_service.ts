@@ -5,7 +5,7 @@ import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 import {User} from "../models/user";
 import {Error} from "../models/error";
 import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/Error_service";
+import {ErrorService} from "../shared/error_service";
 
 export interface SyncedService {
 

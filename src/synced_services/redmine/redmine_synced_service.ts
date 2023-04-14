@@ -12,7 +12,7 @@ import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
 import {Error} from "../../models/error";
 import {SentryService} from "../../shared/sentry_service";
-import {ErrorService} from "../../shared/Error_service";
+import {ErrorService} from "../../shared/error_service";
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -484,8 +484,8 @@ export class RedmineSyncedService implements SyncedService {
           let context = null;
           if (timeEntryBody) {
           //console.error(body);
-            context = this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(timeEntryBody)));
-            error.data = JSON.parse(JSON.stringify(timeEntryBody));
+            context = this._sentryService.createExtraContext("Time entry", timeEntryBody);
+            error.data = timeEntryBody;
         }
           this.errors.push(error);
           this._sentryService.logRedmineError(this._projectsUri, response.body.errors, context)

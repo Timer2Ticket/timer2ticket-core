@@ -2,7 +2,7 @@ import { Constants } from './constants';
 import { Collection, Db, MongoClient, ObjectId } from "mongodb";
 import { User } from '../models/user';
 import { TimeEntrySyncedObject } from '../models/synced_service/time_entry_synced_object/time_entry_synced_object';
-import { JobLog } from '../models/jobLog';
+import { Joblog } from '../models/job_log';
 
 export class DatabaseService {
   private static _mongoDbName = 'timer2ticketDB';
@@ -17,7 +17,7 @@ export class DatabaseService {
 
   private _usersCollection: Collection<User> | undefined;
   private _timeEntrySyncedObjectsCollection: Collection<TimeEntrySyncedObject> | undefined;
-  private _jobLogsCollection: Collection<JobLog> | undefined;
+  private _jobLogsCollection: Collection<Joblog> | undefined;
 
   private _initCalled = false;
 
@@ -195,14 +195,14 @@ export class DatabaseService {
   // JOB LOGS **************************************************
   // ***********************************************************
 
-  async createJobLog(userId: string | ObjectId, type: string, origin: string): Promise<JobLog | null> {
+  async createJobLog(userId: string | ObjectId, type: string, origin: string): Promise<Joblog | null> {
     if (!this._jobLogsCollection) return null;
 
-    const result = await this._jobLogsCollection.insertOne(new JobLog(userId, type, origin));
+    const result = await this._jobLogsCollection.insertOne(new Joblog(userId, type, origin));
     return result.result.ok === 1 ? result.ops[0] : null;
   }
 
-  async updateJobLog(jobLog: JobLog): Promise<JobLog | null> {
+  async updateJobLog(jobLog: Joblog): Promise<Joblog | null> {
     if (!this._jobLogsCollection) return null;
 
     const filterQuery = { _id: new ObjectId(jobLog._id) };
