@@ -33,36 +33,37 @@ cron.schedule('*/10 * * * * *', () => {
   while (!jobQueue.isEmpty()) {
     const job = jobQueue.dequeue();
 
-    const sentryTransaction = Sentry.startTransaction({
-      op: 'job',
-      name: 'Job transaction',
-    });
-
     if (job) {
-      console.log(' -> Do the job');
+      databaseService.getUserById(job.userId).then(result => {
+        if(result !== null) {
+          Sentry.setUser({
+            username: result.username,
+          })
+        }
+
+      })
+      // console.log(' -> Do the job');
       try {
         job.start().then(res => {
           if (res) {
-            console.log(' -> Job successfully done.');
+            // console.log(' -> Job successfully done.');
             return;
           }
 
           // not successful, try to repeat it
-          console.log(' -> Repeating job');
+          // console.log(' -> Repeating job');
           job.start().then(resRepeated => {
             if (resRepeated) {
-              console.log(' -> Job repeated and now successfully done.');
+              // console.log(' -> Job repeated and now successfully done.');
               return;
             }
 
-            console.log(' -> Job unsuccessful.');
-            Sentry.captureMessage(`Job unsuccessful for user: ${job.userId}`);
+            // console.log(' -> Job unsuccessful.');
+            // Sentry.captureMessage(`Job unsuccessful for user: ${job.userId}`);
           });
         });
       } catch (ex) {
         Sentry.captureException(ex);
-      } finally {
-        sentryTransaction.finish();
       }
     }
   }
@@ -218,7 +219,7 @@ app.post('/api/scheduled/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Re
 });
 
 function scheduleJobs(user: User) {
-  console.log(`SCHEDULE jobs for user ${user.username} with id=${user._id}`);
+  // console.log(`SCHEDULE jobs for user ${user.username} with id=${user._id}`);
 
   // cron schedule validation can be omitted (schedule is already validated when user - and schedule too - is updated)
   if (cron.validate(user.configSyncJobDefinition.schedule)) {
@@ -228,7 +229,7 @@ function scheduleJobs(user: User) {
       if (actualUser) {
         const jobLog = await databaseService.createJobLog(user._id, 'config', 't2t-auto');
         if (jobLog) {
-          console.log(' -> Added ConfigSyncJob');
+          // console.log(' -> Added ConfigSyncJob');
           jobQueue.enqueue(new ConfigSyncJob(actualUser, jobLog));
         }
       }
@@ -244,7 +245,7 @@ function scheduleJobs(user: User) {
       if (actualUser?.configSyncJobDefinition.lastSuccessfullyDone) {
         const jobLog = await databaseService.createJobLog(user._id, 'time-entries', 't2t-auto');
         if (jobLog) {
-          console.log(' -> Added TESyncJob');
+          // console.log(' -> Added TESyncJob');
           jobQueue.enqueue(new TimeEntriesSyncJob(actualUser, jobLog));
         }
       }

@@ -2,7 +2,7 @@ import { Constants } from './constants';
 import { Collection, Db, MongoClient, ObjectId } from "mongodb";
 import { User } from '../models/user';
 import { TimeEntrySyncedObject } from '../models/synced_service/time_entry_synced_object/time_entry_synced_object';
-import { JobLog } from '../models/jobLog';
+import { JobLog } from '../models/job_log';
 
 export class DatabaseService {
   private static _mongoDbName = 'timer2ticketDB';

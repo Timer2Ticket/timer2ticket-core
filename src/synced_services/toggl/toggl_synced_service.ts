@@ -8,6 +8,9 @@ import { Mapping } from "../../models/mapping/mapping";
 import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
+import {Error} from "../../models/error";
+import {SentryService} from "../../shared/sentry_service";
+import {ErrorService} from "../../shared/error_service";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -25,6 +28,9 @@ export class TogglTrackSyncedService implements SyncedService {
   private _tagsType: string;
 
   private _responseLimit: number;
+  public errors: Array<Error>;
+  private _sentryService: SentryService
+  private _errorService: ErrorService
 
   constructor(serviceDefinition: ServiceDefinition) {
     this._serviceDefinition = serviceDefinition;
@@ -43,6 +49,11 @@ export class TogglTrackSyncedService implements SyncedService {
 
     // defined by Toggl, cannot override
     this._responseLimit = 50;
+
+    this.errors = [];
+
+    this._sentryService = new SentryService();
+    this._errorService = new ErrorService();
   }
 
   /**
@@ -475,10 +486,29 @@ export class TogglTrackSyncedService implements SyncedService {
 
   handleResponseException(ex: any, functionInfo: string): void {
     if (ex != undefined && (ex.status === 403 || ex.status === 401) ) {
-      console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
-      console.log('please, fix the apiKey of this user or set him as inactive');
+
+      const error = this._errorService.createTogglError(ex);
+
+      const context = [
+          this._sentryService.createExtraContext("Exception", ex),
+          this._sentryService.createExtraContext("Status code", ex.status)
+      ]
+
+      error.data ="API key error. Please check if you API key is correct";
+      const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
+      this._sentryService.logTogglError(message , context);
+      this.errors.push(error);
+
+      // console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
+      // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      console.error('[TOGGL] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      //TODO validate if this should be sent to user FE
+
+      // error.data = ''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive');
+      const message = `${functionInfo} failed with different reason than 403/401 response code!'`
+      this._sentryService.logTogglError(message);
+      // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
+
   }
 }
