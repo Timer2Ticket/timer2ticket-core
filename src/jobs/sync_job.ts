@@ -1,11 +1,11 @@
-import { Joblog } from "../models/job_log";
+import { JobLog } from "../models/job_log";
 import { User } from "../models/user";
 
 export abstract class SyncJob {
   protected _user: User;
-  protected _jobLog: Joblog;
+  protected _jobLog: JobLog;
 
-  constructor(user: User, jobLog: Joblog) {
+  constructor(user: User, jobLog: JobLog) {
     this._user = user;
     this._jobLog = jobLog;
   }

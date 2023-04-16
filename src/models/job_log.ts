@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 import { databaseService } from "../shared/database_service";
 import {Error} from "./error";
 
-export class Joblog {
+export class JobLog {
   _id!: string | ObjectId;
   userId: string | ObjectId;
   // type: 'config' | 'time-entries'
@@ -34,7 +34,7 @@ export class Joblog {
    * Also makes changes to the DB.
    * @returns Promise<JobLog> DB object if update operation was successful. Else Promise<null>.
    */
-  async setToRunning(): Promise<Joblog | null> {
+  async setToRunning(): Promise<JobLog | null> {
     if (this.status !== 'scheduled') {
       return null;
     }
@@ -50,7 +50,7 @@ export class Joblog {
    * @param isSuccessful flag if job was successful. Default true.
    * @returns Promise<JobLog> DB object if update operation was successful. Else Promise<null>.
    */
-  async setToCompleted(isSuccessful = true): Promise<Joblog | null> {
+  async setToCompleted(isSuccessful = true): Promise<JobLog | null> {
     if (this.status !== 'running') {
       return null;
     }

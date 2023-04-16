@@ -9,7 +9,7 @@ import {ErrorService} from "../shared/error_service";
 
 export interface SyncedService {
 
-   errors: Array<Error>;
+  errors: Array<Error>;
   readonly _sentryService: SentryService
   readonly _ErrorService: ErrorService
 
