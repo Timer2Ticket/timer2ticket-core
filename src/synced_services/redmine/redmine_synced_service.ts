@@ -28,8 +28,8 @@ export class RedmineSyncedService implements SyncedService {
 
   private _responseLimit: number;
 
-  private _sentryService: SentryService
-  private _errorService: ErrorService
+  readonly _sentryService: SentryService
+  readonly _errorService: ErrorService
 
   public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
@@ -106,17 +106,17 @@ export class RedmineSyncedService implements SyncedService {
 
   async createServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw new Error("Redmine is meant to be primary.");
+    throw this._errorService.createRedmineCantBeSecondaryError();
   }
 
   async updateServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw new Error("Redmine is meant to be primary.");
+    throw this._errorService.createRedmineCantBeSecondaryError();
   }
 
   async deleteServiceObject(): Promise<boolean> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw new Error("Redmine is meant to be primary.");
+    throw this._errorService.createRedmineCantBeSecondaryError();
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {

@@ -29,8 +29,8 @@ export class TogglTrackSyncedService implements SyncedService {
 
   private _responseLimit: number;
   public errors: Array<Error>;
-  private _sentryService: SentryService
-  private _errorService: ErrorService
+  readonly _sentryService: SentryService
+  readonly _errorService: ErrorService
 
   constructor(serviceDefinition: ServiceDefinition) {
     this._serviceDefinition = serviceDefinition;

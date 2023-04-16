@@ -11,7 +11,7 @@ export interface SyncedService {
 
   errors: Array<Error>;
   readonly _sentryService: SentryService
-  readonly _ErrorService: ErrorService
+  readonly _errorService: ErrorService
 
   /**
    * Get all service objects which: projects, issues, activities etc.
