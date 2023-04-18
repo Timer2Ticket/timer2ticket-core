@@ -491,7 +491,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
       const context = [
           this._sentryService.createExtraContext("Exception", ex),
-          this._sentryService.createExtraContext("Status code", ex.status)
+          this._sentryService.createExtraContext("Status_code", ex.status)
       ]
 
       error.data ="API key error. Please check if you API key is correct";
