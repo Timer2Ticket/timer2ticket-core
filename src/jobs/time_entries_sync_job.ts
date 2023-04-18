@@ -11,6 +11,7 @@ import { MappingsObject } from "../models/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
+import {JobLog} from "../models/job_log";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -421,9 +422,17 @@ export class TimeEntriesSyncJob extends SyncJob {
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
 
       this._jobLog.errors.concat(service.errors)
+      let updated = await databaseService.updateJobLog(this._jobLog);
+      if (updated instanceof  JobLog) {
+        this._jobLog = updated;
+      }
       return createdTimeEntry;
     }
     this._jobLog.errors.concat(service.errors)
+    let updated = await databaseService.updateJobLog(this._jobLog);
+    if (updated instanceof  JobLog) {
+      this._jobLog = updated;
+    }
     return undefined;
   }
 
