@@ -1,12 +1,15 @@
 import { Constants } from './constants';
 import { Collection, Db, MongoClient, ObjectId } from "mongodb";
-import { User } from '../models/user';
+import { User } from '../models/user/user';
 import { TimeEntrySyncedObject } from '../models/synced_service/time_entry_synced_object/time_entry_synced_object';
 import { JobLog } from '../models/job_log';
+import {Connection} from "../models/connection/connection";
 
 export class DatabaseService {
-  private static _mongoDbName = 'timer2ticketDB';
+
+  private static _mongoDbName = Constants.mongoDbName;
   private static _usersCollectionName = 'users';
+  private static _connectionsCollectionName = 'connections';
   private static _timeEntrySyncedObjectsCollectionName = 'timeEntrySyncedObjects';
   private static _jobLogsCollectionName = 'jobLogs';
 
@@ -16,6 +19,7 @@ export class DatabaseService {
   private _db: Db | undefined;
 
   private _usersCollection: Collection<User> | undefined;
+  private _connectionsCollection: Collection<Connection> | undefined;
   private _timeEntrySyncedObjectsCollection: Collection<TimeEntrySyncedObject> | undefined;
   private _jobLogsCollection: Collection<JobLog> | undefined;
 
@@ -51,6 +55,7 @@ export class DatabaseService {
     this._db = this._mongoClient.db(DatabaseService._mongoDbName);
 
     this._usersCollection = this._db.collection(DatabaseService._usersCollectionName);
+    this._connectionsCollection = this._db.collection(DatabaseService._connectionsCollectionName);
     this._timeEntrySyncedObjectsCollection = this._db.collection(DatabaseService._timeEntrySyncedObjectsCollectionName);
     this._jobLogsCollection = this._db.collection(DatabaseService._jobLogsCollectionName);
 
@@ -65,65 +70,128 @@ export class DatabaseService {
   // USERS *****************************************************
   // ***********************************************************
 
-  async getUserById(userId: string): Promise<User | null> {
+  /**
+   * Get user by user id
+   * @param userId
+   */
+  async getUserById(userId: ObjectId): Promise<User | null> {
     if (!this._usersCollection) return null;
 
-    const filterQuery = { _id: new ObjectId(userId) };
+    const filterQuery = { _id: userId };
     return this._usersCollection.findOne(filterQuery);
   }
 
-  async getUserByUsername(username: string): Promise<User | null> {
-    if (!this._usersCollection) return null;
+  // ***********************************************************
+  // CONNECTIONS ***********************************************
+  // ***********************************************************
 
-    const filterQuery = { username: username };
-    return this._usersCollection.findOne(filterQuery);
+  /**
+   * Get connection by connection id
+   * @param connectionId
+   */
+  async getConnectionById(connectionId: ObjectId): Promise<Connection | null> {
+    if (!this._connectionsCollection) return null;
+
+    const filterQuery = { _id: connectionId };
+    return this._connectionsCollection.findOne(filterQuery);
   }
 
-  async getActiveUsers(): Promise<User[]> {
-    if (!this._usersCollection) return [];
+  /**
+   * Get connections which are active
+   */
+  async getActiveConnections(): Promise<Connection[]> {
+    if (!this._connectionsCollection) return [];
 
-    const filterQuery = { status: 'active' };
-    return this._usersCollection.find(filterQuery).toArray();
+    const filterQuery = { isActive: true };
+    return this._connectionsCollection.find(filterQuery).toArray();
   }
 
-  async updateUser(user: User): Promise<User | null> {
-    if (!this._usersCollection) return null;
-
-    const filterQuery = { _id: new ObjectId(user._id) };
-
-    const result = await this._usersCollection.replaceOne(filterQuery, user);
-    return result.result.ok === 1 ? result.ops[0] : null;
+  /**
+   * Update connection partly - only the connection.mappings
+   * @param connection
+   */
+  async updateConnectionMappings(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: { mappings: connection.mappings } });
   }
 
-  private async _updateUserPartly(user: User, updateQuery: Record<string, unknown>): Promise<boolean> {
-    if (!this._usersCollection) return false;
+  /**
+   * Update connection partly - only the connection.configSyncJobDefinition lastJobTime and status
+   * @param connection
+   */
+  async updateConnectionConfigSyncJobLastDone(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: {
+      "configSyncJobDefinition.lastJobTime": connection.configSyncJobDefinition.lastJobTime,
+        "configSyncJobDefinition.status": connection.configSyncJobDefinition.status ,
+    } });
+  }
 
-    const filterQuery = { _id: new ObjectId(user._id) };
+  /**
+   * Update connection partly - only the connection.timeEntrySyncJobDefinition lastJobTime and status
+   * @param connection
+   */
+  async updateConnectionTimeEntrySyncJobLastDone(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: {
+        "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
+        "timeEntrySyncJobDefinition.status": connection.timeEntrySyncJobDefinition.status,
+      } });
+  }
 
-    const result = await this._usersCollection.updateOne(filterQuery, updateQuery);
+  /**
+   * Update connection partly - depends on the updateQuery
+   * @param connection
+   * @param updateQuery
+   * @private
+   */
+  private async _updateConnectionPartly(connection: Connection, updateQuery: Record<string, unknown>): Promise<boolean> {
+    if (!this._connectionsCollection) return false;
+
+    const filterQuery = { _id: new ObjectId(connection._id) };
+
+    const result = await this._connectionsCollection.updateOne(filterQuery, updateQuery);
     return result.result.ok === 1;
   }
 
-  async updateUserMappings(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { mappings: user.mappings } });
+  /**
+   * Get connections which has to be deleted - deleteTimestamp is older than 2 days
+   */
+  async getConnectionsToDelete(): Promise<Connection[]> {
+    if (!this._connectionsCollection) return [];
+
+    // remove connections with 2 days old deleteTimestamp
+    const deleteTimestampFilter = new Date();
+    deleteTimestampFilter.setDate(deleteTimestampFilter.getDate() - 2);
+
+    const filterQuery = { deleteTimestamp: { $lt: deleteTimestampFilter.getTime() } };
+    return this._connectionsCollection.find(filterQuery).toArray();
   }
 
-  async updateUserConfigSyncJobLastSuccessfullyDone(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { "configSyncJobDefinition.lastSuccessfullyDone": user.configSyncJobDefinition.lastSuccessfullyDone } });
-  }
+  /**
+   * Delete connection which has to be deleted - deleteTimestamp is older than 2 days
+   */
+  async cleanUpConnections(): Promise<boolean> {
+    if (!this._connectionsCollection) return false;
 
-  async updateUserTimeEntrySyncJobLastSuccessfullyDone(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { "timeEntrySyncJobDefinition.lastSuccessfullyDone": user.timeEntrySyncJobDefinition.lastSuccessfullyDone } });
+    // remove connections with 2 days old deleteTimestamp
+    const deleteTimestampFilter = new Date();
+    deleteTimestampFilter.setDate(deleteTimestampFilter.getDate() - 2);
+
+    const filterQuery = { deleteTimestamp: { $lt: deleteTimestampFilter.getTime() } };
+    const result = await this._connectionsCollection.deleteMany(filterQuery);
+    return result.result.ok === 1;
   }
 
   // ***********************************************************
   // TIME ENTRY SYNCED OBJECTS *********************************
   // ***********************************************************
 
-  async getTimeEntrySyncedObjects(user: User): Promise<TimeEntrySyncedObject[] | null> {
+  /**
+   * Get time entry synced objects by connection
+   * @param connection
+   */
+  async getTimeEntrySyncedObjects(connection: Connection): Promise<TimeEntrySyncedObject[] | null> {
     if (!this._timeEntrySyncedObjectsCollection) return null;
 
-    const filterQuery = { userId: new ObjectId(user._id) };
+    const filterQuery = { connectionId: new ObjectId(connection._id) };
     return this._timeEntrySyncedObjectsCollection.find(filterQuery).toArray();
   }
 
@@ -180,6 +248,19 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
+  /**
+   * Delete time entry synced which belongs to the connection
+   * @param connectionId
+   */
+  async deleteTimeEntrySyncedObjectByConnection(connectionId: ObjectId) {
+    if (!this._timeEntrySyncedObjectsCollection) return false;
+
+    const filterQuery = { connectionId: connectionId };
+
+    const result = await this._timeEntrySyncedObjectsCollection.deleteMany(filterQuery);
+    return result.result.ok === 1;
+  }
+
   async getTimeEntrySyncedObjectForArchiving(steoId: number | string, serviceName: string, userIdInput: string | ObjectId): Promise<TimeEntrySyncedObject | null>
   {
     if (!this._timeEntrySyncedObjectsCollection) return null;
@@ -195,10 +276,21 @@ export class DatabaseService {
   // JOB LOGS **************************************************
   // ***********************************************************
 
-  async createJobLog(userId: string | ObjectId, type: string, origin: string): Promise<JobLog | null> {
+  /**
+   * Get job logs by ID
+   * @param jobLogId
+   */
+  async getJobLogById(jobLogId: string): Promise<JobLog | null> {
     if (!this._jobLogsCollection) return null;
 
-    const result = await this._jobLogsCollection.insertOne(new JobLog(userId, type, origin));
+    const filterQuery = { _id: new ObjectId(jobLogId) };
+    return this._jobLogsCollection.findOne(filterQuery);
+  }
+
+  async createJobLog(connectionId: Connection, type: string, origin: string): Promise<JobLog | null> {
+    if (!this._jobLogsCollection) return null;
+
+    const result = await this._jobLogsCollection.insertOne(new JobLog(connectionId, type, origin));
     return result.result.ok === 1 ? result.ops[0] : null;
   }
 

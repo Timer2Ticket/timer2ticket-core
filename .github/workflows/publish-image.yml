@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - v*
+    branches:
+      - DP-paulmar1
 jobs:
   run-npm-build:
     runs-on: ubuntu-latest

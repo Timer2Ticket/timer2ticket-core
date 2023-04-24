@@ -1,11 +1,11 @@
-import { Mapping } from "../models/mapping/mapping";
-import { MappingsObject } from "../models/mapping/mappings_object";
+import { Mapping } from "../models/connection/mapping/mapping";
+import { MappingsObject } from "../models/connection/mapping/mappings_object";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
-import {User} from "../models/user";
 import {Timer2TicketError} from "../models/timer2TicketError";
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
+import {Connection} from "../models/connection/connection";
 
 export interface SyncedService {
 
@@ -85,5 +85,5 @@ export interface SyncedService {
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[];
 
-  getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null>;
+  getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null>;
 }
