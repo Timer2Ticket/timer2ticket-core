@@ -86,9 +86,16 @@ export class RedmineSyncedService implements SyncedService {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
         } else if (res.status === 422) {
-          // this is a debug log to test where to add correct logging of 422 errors.
-          Sentry.captureMessage("Caught 422 in _retryAndWaitInCaseOfTooManyRequests");
-        }
+            const error = this._errorService.createRedmineError(res.body.errors);
+            let context = null;
+            if (body) {
+              // don't know how to create context from body otherwise. This is a band-aid solution.
+              context = this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body)));
+              error.data = body;
+            }
+            this.errors.push(error);
+            this._sentryService.logRedmineError(this._projectsUri, res.body.errors, context)
+          }
       });
 
 
@@ -487,20 +494,7 @@ export class RedmineSyncedService implements SyncedService {
     );
 
     if (!response || !response.ok) {
-        // this is a debug log to test where to add correct logging of 422 errors.
-        Sentry.captureMessage(`Response not ok in createTimeEntry. Response is ${response}`);
-        if (response.status === 422) {
-          const error = this._errorService.createRedmineError(response.body.errors);
-        //console.error(res.body.errors);
-          let context = null;
-          if (timeEntryBody) {
-          //console.error(body);
-            context = this._sentryService.createExtraContext("Time entry", timeEntryBody);
-            error.data = timeEntryBody;
-        }
-          this.errors.push(error);
-          this._sentryService.logRedmineError(this._projectsUri, response.body.errors, context)
-      }
+
       return null;
     }
 
