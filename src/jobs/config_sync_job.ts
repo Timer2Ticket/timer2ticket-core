@@ -43,7 +43,7 @@ export class ConfigSyncJob extends SyncJob {
     //we dont have all the service objects and stop the job
     if (typeof objectsToSync === "boolean") {
       let message: string = 'Problem occurred while getting primary service objects.';
-      this._jobLog.errors.push(this._errorService.createError(message, "Config Job"));
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
       return false;
     }
 
@@ -58,7 +58,7 @@ export class ConfigSyncJob extends SyncJob {
       //same as above, there was a problem communication problem with service. We stop the job.
       if (typeof allServiceObjects === "boolean") {
         let message: string = 'Problem occurred while getting secondary service objects';
-        this._jobLog.errors.push(this._errorService.createError(message, "Config Job"));
+        this._jobLog.errors.push(this._errorService.createConfigJobError(message));
         return false;
       }
 
@@ -164,14 +164,14 @@ export class ConfigSyncJob extends SyncJob {
         if (primaryMappingObjects.length !== 1) {
           operationsOk = false;
           let message: string = 'primaryMappingObject does not exist or 2 timeEntries with same ID exist';
-          this._jobLog.errors.push(this._errorService.createError(message, "Config Job"));
+          this._jobLog.errors.push(this._errorService.createConfigJobError(message));
         } else {
           const primaryMappingObject = primaryMappingObjects[0];
           const primaryObjectServiceName = primaryMappingObject.service;
           if (primaryObjectServiceName !== 'Redmine') {
             operationsOk = false;
             let message: string = 'Archive TESOs functionality is not yet supported for services other than Redmine!';
-            this._jobLog.errors.push(this._errorService.createError(message, "Config Job"));
+            this._jobLog.errors.push(this._errorService.createConfigJobError(message));
           } else {
             const service = SyncedServiceCreator.create(primaryServiceDefinition)
             const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);

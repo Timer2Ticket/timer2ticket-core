@@ -1,13 +1,13 @@
 
 
 export class Timer2ticketError {
-    service: string;
+    specification: string;
     exception: unknown;
     data: unknown;
 
 
     constructor() {
-        this.service = "";
+        this.specification = "";
         this.exception = {};
         this.data = {};
     }

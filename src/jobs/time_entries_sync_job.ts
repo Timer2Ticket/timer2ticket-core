@@ -12,6 +12,7 @@ import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
+import {Timer2ticketError} from "../models/timer2ticketError";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -373,6 +374,15 @@ export class TimeEntriesSyncJob extends SyncJob {
     return true;
   }
 
+  private async updateJobLog(errors: Timer2ticketError[])
+  {
+    this._jobLog.errors.concat(errors)
+    let updated = await databaseService.updateJobLog(this._jobLog);
+    if (updated instanceof JobLog) {
+      this._jobLog = updated;
+    }
+  }
+
   /**
    * Creates a new time entry for given service based on given TE model.
    * Also creates new STEO and pushes it to the given TESO.
@@ -421,18 +431,10 @@ export class TimeEntriesSyncJob extends SyncJob {
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
 
-      this._jobLog.errors.concat(service.errors)
-      let updated = await databaseService.updateJobLog(this._jobLog);
-      if (updated instanceof  JobLog) {
-        this._jobLog = updated;
-      }
+      await this.updateJobLog(service.errors)
       return createdTimeEntry;
     }
-    this._jobLog.errors.concat(service.errors)
-    let updated = await databaseService.updateJobLog(this._jobLog);
-    if (updated instanceof  JobLog) {
-      this._jobLog = updated;
-    }
+    await this.updateJobLog(service.errors)
     return undefined;
   }
 
