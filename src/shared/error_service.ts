@@ -20,8 +20,4 @@ export class ErrorService {
     public createTogglError(exception: any): Timer2ticketError {
         return this.createError(exception, ErrorService.togglServiceName)
     }
-
-    public createRedmineCantBeSecondaryError(): Timer2ticketError {
-        return this.createError("Redmine is meant to be primary.", ErrorService.redmineServiceName)
-    }
 }
