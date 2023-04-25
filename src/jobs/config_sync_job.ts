@@ -27,7 +27,7 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
-    console.log('[OMR] config_sync_job started for user '.concat(this._user.username));
+    // console.log('[OMR] config_sync_job started for user '.concat(this._user.username));
     const primaryServiceDefinition: ServiceDefinition | undefined
       = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.isPrimary);
 
@@ -118,6 +118,8 @@ export class ConfigSyncJob extends SyncJob {
       } catch (ex) {
         operationsOk = false;
         //TODO figure out better way to work with extra context.
+        //temporary console log to test if this is the correct place.
+        console.log(`User: ${this._user.username} experienced error in config job for object: ${objectToSync.name}, ${objectToSync.type}, ${objectToSync.id}`);
         this._sentryService.createExtraContext('Object_to_sync', JSON.parse(JSON.stringify(objectToSync)));
         this._sentryService.logError(ex);
       }
