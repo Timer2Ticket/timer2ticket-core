@@ -158,7 +158,7 @@ app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respon
     activeUsersScheduledConfigSyncTasks.delete(userId);
   }
   if (timeEntriesTask) {
-    timeEntriesTask.destroy();
+    timeEntriesTask.stop();
     activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
   }
 
@@ -200,7 +200,7 @@ app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respons
     activeUsersScheduledConfigSyncTasks.delete(userId);
   }
   if (timeEntriesTask) {
-    timeEntriesTask.destroy();
+    timeEntriesTask.stop();
     activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
   }
 
