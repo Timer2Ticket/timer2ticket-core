@@ -120,8 +120,8 @@ export class ConfigSyncJob extends SyncJob {
         //TODO figure out better way to work with extra context.
         //temporary console log to test if this is the correct place.
         console.log(`User: ${this._user.username} experienced error in config job for object: ${objectToSync.name}, ${objectToSync.type}, ${objectToSync.id}`);
-        this._sentryService.createExtraContext('Object_to_sync', JSON.parse(JSON.stringify(objectToSync)));
-        this._sentryService.logError(ex);
+        let context = this._sentryService.createExtraContext('Object_to_sync', JSON.parse(JSON.stringify(objectToSync)));
+        this._sentryService.logError(ex, context);
       }
     }
 
