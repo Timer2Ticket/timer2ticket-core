@@ -1,6 +1,6 @@
 
 
-export class Error {
+export class Timer2ticketError {
     service: string;
     exception: unknown;
     data: unknown;

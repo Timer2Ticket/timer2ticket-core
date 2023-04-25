@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { databaseService } from "../shared/database_service";
-import {Error} from "./error";
+import {Timer2ticketError} from "./timer2ticketError";
 
 export class JobLog {
   _id!: string | ObjectId;
@@ -15,7 +15,7 @@ export class JobLog {
   started: number | null;
   completed: number | null;
   // currently not used
-  errors: Array<Error>;
+  errors: Array<Timer2ticketError>;
 
   constructor(userId: string | ObjectId, type: string, origin: string) {
     this.userId = userId;

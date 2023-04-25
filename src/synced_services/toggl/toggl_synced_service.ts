@@ -8,7 +8,7 @@ import { Mapping } from "../../models/mapping/mapping";
 import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
-import {Error} from "../../models/error";
+import {Timer2ticketError} from "../../models/timer2ticketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 
@@ -28,7 +28,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private _tagsType: string;
 
   private _responseLimit: number;
-  public errors: Array<Error>;
+  public errors: Array<Timer2ticketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
 

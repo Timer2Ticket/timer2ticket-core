@@ -10,10 +10,11 @@ import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Mapping } from "../../models/mapping/mapping";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
-import {Error} from "../../models/error";
+import {Timer2ticketError} from "../../models/timer2ticketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import * as Sentry from '@sentry/node';
+
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -32,7 +33,7 @@ export class RedmineSyncedService implements SyncedService {
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
 
-  public errors: Array<Error>;
+  public errors: Array<Timer2ticketError>;
   constructor(serviceDefinition: ServiceDefinition) {
     if (serviceDefinition.config.apiPoint === null) {
       //TODO add sentry error
@@ -111,17 +112,20 @@ export class RedmineSyncedService implements SyncedService {
 
   async createServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   async updateServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   async deleteServiceObject(): Promise<boolean> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {
