@@ -35,6 +35,7 @@ export class RedmineSyncedService implements SyncedService {
   public errors: Array<Error>;
   constructor(serviceDefinition: ServiceDefinition) {
     if (serviceDefinition.config.apiPoint === null) {
+      //TODO add sentry error
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
     }
 

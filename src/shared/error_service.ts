@@ -4,7 +4,7 @@ export class ErrorService {
     static readonly redmineServiceName = "Redmine";
     static readonly togglServiceName = "Toggl";
 
-    private createError(exception: any, serviceName: string): Error {
+    public createError(exception: any, serviceName: string): Error {
         const error = new Error();
 
         error.exception = exception;
