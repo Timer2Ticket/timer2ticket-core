@@ -10,9 +10,11 @@ import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Mapping } from "../../models/mapping/mapping";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
-import {Error} from "../../models/error";
+import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
+import * as Sentry from '@sentry/node';
+
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
 
@@ -31,9 +33,10 @@ export class RedmineSyncedService implements SyncedService {
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
 
-  public errors: Array<Error>;
+  public errors: Array<Timer2TicketError>;
   constructor(serviceDefinition: ServiceDefinition) {
     if (serviceDefinition.config.apiPoint === null) {
+      //TODO add sentry error
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
     }
 
@@ -82,6 +85,9 @@ export class RedmineSyncedService implements SyncedService {
         if (res.status === 429) {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
+        } else if (res.status === 422) {
+          // this is a debug log to test where to add correct logging of 422 errors.
+          Sentry.captureMessage("Caught 422 in _retryAndWaitInCaseOfTooManyRequests");
         }
       });
 
@@ -106,17 +112,20 @@ export class RedmineSyncedService implements SyncedService {
 
   async createServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   async updateServiceObject(): Promise<ServiceObject> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   async deleteServiceObject(): Promise<boolean> {
     // Redmine cannot be secondary for now. So this method is not used.
-    throw this._errorService.createRedmineCantBeSecondaryError();
+    // TODO change to Not implemented error.
+    throw new Error("Redmine is meant to be primary.");
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {
@@ -478,6 +487,8 @@ export class RedmineSyncedService implements SyncedService {
     );
 
     if (!response || !response.ok) {
+        // this is a debug log to test where to add correct logging of 422 errors.
+        Sentry.captureMessage(`Response not ok in createTimeEntry. Response is ${response}`);
         if (response.status === 422) {
           const error = this._errorService.createRedmineError(response.body.errors);
         //console.error(res.body.errors);
@@ -566,7 +577,7 @@ export class RedmineSyncedService implements SyncedService {
       const error = this._errorService.createRedmineError(ex);
       const context =  [
         this._sentryService.createExtraContext("Exception", ex),
-        this._sentryService.createExtraContext("Status code", ex.status)
+        this._sentryService.createExtraContext("Status_code", ex.status)
       ]
 
       const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`

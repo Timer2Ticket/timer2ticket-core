@@ -1,13 +1,19 @@
 import { JobLog } from "../models/job_log";
 import { User } from "../models/user";
+import {SentryService} from "../shared/sentry_service";
+import {ErrorService} from "../shared/error_service";
 
 export abstract class SyncJob {
   protected _user: User;
   protected _jobLog: JobLog;
+  protected _sentryService;
+  protected _errorService;
 
   constructor(user: User, jobLog: JobLog) {
     this._user = user;
     this._jobLog = jobLog;
+    this._sentryService = new SentryService();
+    this._errorService = new ErrorService();
   }
 
   /**

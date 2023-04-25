@@ -152,11 +152,13 @@ app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respon
   const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
 
   if (configTask) {
-    configTask.destroy();
+    // should address error: #20471
+    // using this fix: https://github.com/node-cron/node-cron/pull/289
+    configTask.stop();
     activeUsersScheduledConfigSyncTasks.delete(userId);
   }
   if (timeEntriesTask) {
-    timeEntriesTask.destroy();
+    timeEntriesTask.stop();
     activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
   }
 
@@ -192,11 +194,13 @@ app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respons
   }
 
   if (configTask) {
-    configTask.destroy();
+    // should address error: #20471
+    // using this fix: https://github.com/node-cron/node-cron/pull/289
+    configTask.stop();
     activeUsersScheduledConfigSyncTasks.delete(userId);
   }
   if (timeEntriesTask) {
-    timeEntriesTask.destroy();
+    timeEntriesTask.stop();
     activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
   }
 

@@ -1,13 +1,13 @@
 
 
-export class Error {
-    service: string;
+export class Timer2TicketError {
+    specification: string;
     exception: unknown;
     data: unknown;
 
 
     constructor() {
-        this.service = "";
+        this.specification = "";
         this.exception = {};
         this.data = {};
     }

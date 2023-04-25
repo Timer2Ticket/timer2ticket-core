@@ -11,6 +11,9 @@ import { SyncedServiceCreator } from "../synced_services/synced_service_creator"
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import * as Sentry from '@sentry/node';
+import {SentryService} from "../shared/sentry_service";
+import {ErrorService} from "../shared/error_service";
+import {ExtraContext} from "../models/extra_context";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -39,7 +42,8 @@ export class ConfigSyncJob extends SyncJob {
     //if we get boolean, a problem occurred while getting data from service (most likely 401 or 403 error)
     //we dont have all the service objects and stop the job
     if (typeof objectsToSync === "boolean") {
-      console.error('Problem occurred while getting primary service objects of user='.concat(this._user.username, ', job stopped.'));
+      let message: string = 'Problem occurred while getting primary service objects.';
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
       return false;
     }
 
@@ -53,7 +57,8 @@ export class ConfigSyncJob extends SyncJob {
       const allServiceObjects = await syncedService.getAllServiceObjects();
       //same as above, there was a problem communication problem with service. We stop the job.
       if (typeof allServiceObjects === "boolean") {
-        console.error('Problem occurred while getting secondary service objects of user='.concat(this._user.username, ', job stopped.'));
+        let message: string = 'Problem occurred while getting secondary service objects';
+        this._jobLog.errors.push(this._errorService.createConfigJobError(message));
         return false;
       }
 
@@ -112,7 +117,7 @@ export class ConfigSyncJob extends SyncJob {
         checkedMappings.push(mapping);
       } catch (ex) {
         operationsOk = false;
-        console.error('err: ConfigSyncJob: create || check; exception');
+        this._sentryService.logError(ex);
       }
     }
 
@@ -137,15 +142,16 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
 
-    console.log('[OMR] -> som za markToDelete, pocet obsolete='.concat(String(obsoleteMappings.length)));
+    // console.log('[OMR] -> som za markToDelete, pocet obsolete='.concat(String(obsoleteMappings.length)));
 
     if (obsoleteMappings.length > 0) {
       const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
       for (const mapping of obsoleteMappings) {
         if (mapping.primaryObjectType !== 'issue') {
-          let message = 'OBSOLETE MAPPING SKIP -> typ: '.concat(<string>mapping.primaryObjectType, ' value: ', mapping.name, ' is marked to delete!');
-          console.log(message);
-          Sentry.captureMessage(message);
+          // let message = 'OBSOLETE MAPPING SKIP -> typ: '.concat(<string>mapping.primaryObjectType, ' value: ', mapping.name, ' is marked to delete!');
+          // add user error
+          // console.log(message);
+          // // Sentry.captureMessage(message);
           operationsOk &&= await this._deleteMapping(mapping);
           continue;
         }
@@ -157,13 +163,15 @@ export class ConfigSyncJob extends SyncJob {
         const primaryMappingObjects = mapping.mappingsObjects.filter($object => $object.id === primaryObjectId) //possible 2 mapping objects with same ID can exist, low probability, i dont deal with it here
         if (primaryMappingObjects.length !== 1) {
           operationsOk = false;
-          console.error('err: ConfigSyncJob: primaryMappingObject does not exist or 2 timeEntries with same ID exist');
+          let message: string = 'primaryMappingObject does not exist or 2 timeEntries with same ID exist';
+          this._jobLog.errors.push(this._errorService.createConfigJobError(message));
         } else {
           const primaryMappingObject = primaryMappingObjects[0];
           const primaryObjectServiceName = primaryMappingObject.service;
           if (primaryObjectServiceName !== 'Redmine') {
             operationsOk = false;
-            console.error('Archive TESOs functionality is not yet supported for services other than Redmine!');
+            let message: string = 'Archive TESOs functionality is not yet supported for services other than Redmine!';
+            this._jobLog.errors.push(this._errorService.createConfigJobError(message));
           } else {
             const service = SyncedServiceCreator.create(primaryServiceDefinition)
             const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);
@@ -173,10 +181,10 @@ export class ConfigSyncJob extends SyncJob {
               for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
                 const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, primaryObjectServiceName, this._user._id);
                 if (foundTESO == null) {
-                  console.log('Null returned from DB findOne!');
+                  // console.log('Null returned from DB findOne!');
                   operationsOk = false;
                 } else {
-                  console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
+                  // console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
                   timeEntriesToArchive.push(foundTESO);
                 }
               }
@@ -188,7 +196,7 @@ export class ConfigSyncJob extends SyncJob {
         operationsOk &&= await this._deleteMapping(mapping);
       }
 
-      console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
+      // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
         const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
         operationsOk &&= updateResponse !== null;
@@ -212,6 +220,8 @@ export class ConfigSyncJob extends SyncJob {
     // persist changes in the mappings
     // even if some api operations were not ok, persist changes to the mappings - better than nothing
     await databaseService.updateUserMappings(this._user);
+
+    await databaseService.updateJobLog(this._jobLog);
 
     return operationsOk;
   }
@@ -298,7 +308,7 @@ export class ConfigSyncJob extends SyncJob {
           const updatedObject = await serviceWrapper.syncedService.updateServiceObject(
             mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
           );
-          console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
+          // console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
           mappingsObject.name = updatedObject.name;
           mappingsObject.lastUpdated = Date.now();
         } else {
@@ -317,6 +327,8 @@ export class ConfigSyncJob extends SyncJob {
       newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
     } catch (ex: any) {
       if (ex.status !== 400) {
+        let context = this._sentryService.createExtraContext("Status_code", ex.status);
+        this._sentryService.logError(ex, context);
         throw ex;
       }
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
@@ -324,10 +336,11 @@ export class ConfigSyncJob extends SyncJob {
       const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));
       newObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
       if (!newObject) {
-        // not found, rethrow exception
+        this._sentryService.logError(ex);
+
         throw ex;
       }
-      console.log(`ConfigSyncJob: Creating mapping, but object exists, using real object ${newObject.name}`);
+      // console.log(`ConfigSyncJob: Creating mapping, but object exists, using real object ${newObject.name}`);
     }
     return newObject;
   }
@@ -350,7 +363,8 @@ export class ConfigSyncJob extends SyncJob {
           // service object is missing, it is ok to delete the mapping
           operationOk = true;
         } else {
-          console.error('err: ConfigSyncJob: delete; exception');
+          this._sentryService.logError(ex);
+          // console.error('err: ConfigSyncJob: delete; exception');
         }
       }
       operationsOk &&= operationOk;

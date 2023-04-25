@@ -3,13 +3,13 @@ import { MappingsObject } from "../models/mapping/mappings_object";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 import {User} from "../models/user";
-import {Error} from "../models/error";
+import {Timer2TicketError} from "../models/timer2TicketError";
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
 
 export interface SyncedService {
 
-  errors: Array<Error>;
+  errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
 
