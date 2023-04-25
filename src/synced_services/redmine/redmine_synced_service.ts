@@ -10,7 +10,7 @@ import { MappingsObject } from "../../models/mapping/mappings_object";
 import { Mapping } from "../../models/mapping/mapping";
 import { Constants } from "../../shared/constants";
 import {User} from "../../models/user";
-import {Timer2ticketError} from "../../models/timer2ticketError";
+import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import * as Sentry from '@sentry/node';
@@ -33,7 +33,7 @@ export class RedmineSyncedService implements SyncedService {
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
 
-  public errors: Array<Timer2ticketError>;
+  public errors: Array<Timer2TicketError>;
   constructor(serviceDefinition: ServiceDefinition) {
     if (serviceDefinition.config.apiPoint === null) {
       //TODO add sentry error

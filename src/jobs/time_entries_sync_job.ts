@@ -12,7 +12,7 @@ import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
-import {Timer2ticketError} from "../models/timer2ticketError";
+import {Timer2TicketError} from "../models/timer2TicketError";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -374,7 +374,7 @@ export class TimeEntriesSyncJob extends SyncJob {
     return true;
   }
 
-  private async updateJobLog(errors: Timer2ticketError[])
+  private async updateJobLog(errors: Timer2TicketError[])
   {
     this._jobLog.errors.concat(errors)
     let updated = await databaseService.updateJobLog(this._jobLog);
