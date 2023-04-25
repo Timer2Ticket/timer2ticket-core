@@ -87,10 +87,12 @@ export class RedmineSyncedService implements SyncedService {
           needToWait = true;
         } else if (res.status === 422) {
             const error = this._errorService.createRedmineError(res.body.errors);
-            let context = null;
+          const context =  [
+            this._sentryService.createExtraContext("Status_code", {'status_code': res.status})
+          ]
             if (body) {
               // don't know how to create context from body otherwise. This is a band-aid solution.
-              context = this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body)));
+              context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
               error.data = body;
             }
             this.errors.push(error);
