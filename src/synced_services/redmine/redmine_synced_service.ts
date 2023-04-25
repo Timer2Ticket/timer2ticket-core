@@ -496,7 +496,7 @@ export class RedmineSyncedService implements SyncedService {
     );
 
     if (!response || !response.ok) {
-
+      //TODO potentially add some minor logging here
       return null;
     }
 
