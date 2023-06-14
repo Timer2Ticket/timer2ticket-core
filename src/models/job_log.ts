@@ -3,8 +3,16 @@ import { databaseService } from "../shared/database_service";
 import {Timer2TicketError} from "./timer2TicketError";
 
 export class JobLog {
+  // Mongo
   _id!: string | ObjectId;
+
+  // UserId
   userId: string | ObjectId;
+  connectionId!: ObjectId;
+  userConnectionId!: number;
+
+  connectionBetween!: string;
+
   // type: 'config' | 'time-entries'
   type: string;
   // origin: 't2t-auto' | 'manual'
