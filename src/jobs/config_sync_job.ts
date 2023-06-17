@@ -9,10 +9,6 @@ import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
-import * as Sentry from '@sentry/node';
-import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/error_service";
-import {ExtraContext} from "../models/extra_context";
 import {Connection} from "../models/connection/connection";
 import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
 

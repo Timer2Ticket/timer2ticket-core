@@ -8,7 +8,6 @@ import { TimeEntriesSyncJob } from './jobs/time_entries_sync_job';
 import { Constants } from './shared/constants';
 import { databaseService } from './shared/database_service';
 import {Connection} from "./models/connection/connection";
-import {Timezone} from "tz-offset";
 import {ObjectId} from "mongodb";
 
 Sentry.init({

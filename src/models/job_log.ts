@@ -60,6 +60,7 @@ export class JobLog {
   /**
    * Sets the status of this object to '(un)successful' + sets completed to now.
    * Also makes changes to the DB.
+   * @param jobLog job log to update
    * @param isSuccessful flag if job was successful. Default true.
    * @returns Promise<JobLog> DB object if update operation was successful. Else Promise<null>.
    */
