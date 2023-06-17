@@ -1,15 +1,15 @@
 import { SyncedService } from "./synced_service";
 import { TogglTrackSyncedService } from "./toggl/toggl_synced_service";
 import { RedmineSyncedService } from "./redmine/redmine_synced_service";
-import { ServiceDefinition } from "../models/service_definition/service_definition";
+import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
 
 export class SyncedServiceCreator {
-  static create(serviceDefinition: ServiceDefinition): SyncedService {
-    switch (serviceDefinition.name) {
-      case 'TogglTrack':
-        return new TogglTrackSyncedService(serviceDefinition);
+  static create(syncedServiceConfig: SyncedServiceDefinition): SyncedService {
+    switch (syncedServiceConfig.name) {
+      case 'Toggl Track':
+        return new TogglTrackSyncedService(syncedServiceConfig);
       default:
-        return new RedmineSyncedService(serviceDefinition);
+        return new RedmineSyncedService(syncedServiceConfig);
     }
   }
 }

@@ -1,22 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ServiceDefinition } from "../../models/service_definition/service_definition";
 import { TimeEntry } from "../../models/synced_service/time_entry/time_entry";
 import { SyncedService } from "../synced_service";
 import superagent, { SuperAgentRequest } from "superagent";
 import { ServiceObject } from "../../models/synced_service/service_object/service_object";
 import { RedmineTimeEntry } from "../../models/synced_service/time_entry/redmine_time_entry";
 import { Utilities } from "../../shared/utilities";
-import { MappingsObject } from "../../models/mapping/mappings_object";
-import { Mapping } from "../../models/mapping/mapping";
+import { MappingsObject } from "../../models/connection/mapping/mappings_object";
+import { Mapping } from "../../models/connection/mapping/mapping";
 import { Constants } from "../../shared/constants";
-import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
-import * as Sentry from '@sentry/node';
+import {SyncedServiceDefinition} from "../../models/connection/config/synced_service_definition";
+import {Connection} from "../../models/connection/connection";
 
 export class RedmineSyncedService implements SyncedService {
-  private _serviceDefinition: ServiceDefinition;
+  private _syncedServiceDefinition: SyncedServiceDefinition;
 
   private _projectsUri: string;
   private _issuesUri: string;
@@ -34,19 +33,19 @@ export class RedmineSyncedService implements SyncedService {
   readonly _errorService: ErrorService
 
   public errors: Array<Timer2TicketError>;
-  constructor(serviceDefinition: ServiceDefinition) {
-    if (serviceDefinition.config.apiPoint === null) {
+  constructor(syncedServiceDefinition: SyncedServiceDefinition) {
+    if (syncedServiceDefinition.config.apiPoint === null) {
       //TODO add sentry error
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
     }
 
-    this._serviceDefinition = serviceDefinition;
+    this._syncedServiceDefinition = syncedServiceDefinition;
 
-    this._projectsUri = `${serviceDefinition.config.apiPoint}projects.json`;
-    this._issuesUri = `${serviceDefinition.config.apiPoint}issues.json`; //returns only open issues
-    this._timeEntryActivitiesUri = `${serviceDefinition.config.apiPoint}enumerations/time_entry_activities.json`;
-    this._timeEntriesUri = `${serviceDefinition.config.apiPoint}time_entries.json`;
-    this._timeEntryUri = `${serviceDefinition.config.apiPoint}time_entries/[id].json`;
+    this._projectsUri = `${syncedServiceDefinition.config.apiPoint}projects.json`;
+    this._issuesUri = `${syncedServiceDefinition.config.apiPoint}issues.json`; //returns only open issues
+    this._timeEntryActivitiesUri = `${syncedServiceDefinition.config.apiPoint}enumerations/time_entry_activities.json`;
+    this._timeEntriesUri = `${syncedServiceDefinition.config.apiPoint}time_entries.json`;
+    this._timeEntryUri = `${syncedServiceDefinition.config.apiPoint}time_entries/[id].json`;
 
     this._projectsType = 'project';
     this._issuesType = 'issue';
@@ -164,7 +163,7 @@ export class RedmineSyncedService implements SyncedService {
                 .query(queryParams)
                 .accept('application/json')
                 .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (ex: any) {
         this.handleResponseException(ex, 'getAllProjects');
@@ -215,7 +214,7 @@ export class RedmineSyncedService implements SyncedService {
                 .query(queryParams)
                 .accept('application/json')
                 .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (ex: any) {
         this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
@@ -246,7 +245,7 @@ export class RedmineSyncedService implements SyncedService {
               .get(this._timeEntryActivitiesUri)
               .accept('application/json')
               .type('application/json')
-              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+              .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
@@ -278,7 +277,7 @@ export class RedmineSyncedService implements SyncedService {
     const queryParams: Record<string, any> = {
       limit: this._responseLimit,
       offset: 0,
-      user_id: this._serviceDefinition.config.userId,
+      user_id: this._syncedServiceDefinition.config.userId,
       from: start ? Utilities.getOnlyDateString(start) : null,
     };
 
@@ -291,7 +290,7 @@ export class RedmineSyncedService implements SyncedService {
           .query(queryParams)
           .accept('application/json')
           .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
       );
 
       response.body['time_entries'].forEach((timeEntry: never) => {
@@ -329,7 +328,7 @@ export class RedmineSyncedService implements SyncedService {
           .get(this._timeEntryUri.replace('[id]', id.toString()))
           .accept('application/json')
           .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
       );
     } catch (err: any) {
       if (err && (err.status === 403 || err.status === 404)) {
@@ -360,7 +359,7 @@ export class RedmineSyncedService implements SyncedService {
     );
   }
 
-  async getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null> {
+  async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
     let totalCount = 0;
     //console.log('[OMR] -> getTimeEntriesRelatedToMappingObject called!');
     let response;
@@ -370,13 +369,13 @@ export class RedmineSyncedService implements SyncedService {
       return null;
     }
 
-    let redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
+    const redmineServiceDefinition = Connection.findServiceDefinitionByName("Redime", connection);
     if (typeof redmineServiceDefinition === 'undefined') {
       //console.log('Redmine service definition not found for user '.concat(user.username));
       return null;
     }
 
-    let redmineUserId = redmineServiceDefinition.config.userId;
+    const redmineUserId = redmineServiceDefinition.config.userId;
     //console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
 
     const queryParams: Record<string, any> = {
@@ -397,7 +396,7 @@ export class RedmineSyncedService implements SyncedService {
                 .query(queryParams)
                 .accept('application/json')
                 .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
@@ -474,9 +473,9 @@ export class RedmineSyncedService implements SyncedService {
       hours: (hours === 0.0 || hours > 0.01) ? hours : 0.01,
       spent_on: Utilities.getOnlyDateString(start),
       comments: text,
-      user_id: this._serviceDefinition.config.userId,
+      user_id: this._syncedServiceDefinition.config.userId,
       // if activityId not specified => fill with default from config
-      activity_id: activityId ? activityId : this._serviceDefinition.config.defaultTimeEntryActivity?.id,
+      activity_id: activityId ? activityId : this._syncedServiceDefinition.config.defaultTimeEntryActivity?.id,
     };
 
     if (issueId) {
@@ -490,7 +489,7 @@ export class RedmineSyncedService implements SyncedService {
         .post(this._timeEntriesUri)
         .accept('application/json')
         .type('application/json')
-        .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         .send({ time_entry: timeEntryBody }),
       timeEntryBody
     );
@@ -524,7 +523,7 @@ export class RedmineSyncedService implements SyncedService {
           .delete(this._timeEntryUri.replace('[id]', id.toString()))
           .accept('application/json')
           .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
       );
 
       return response.ok;
@@ -549,14 +548,14 @@ export class RedmineSyncedService implements SyncedService {
     const mappingsObjectsResult: MappingsObject[] = [];
     for (const mapping of mappings) {
       // ===  'Redmine' (is stored in this._serviceDefinition.name)
-      const redmineMappingsObject = mapping.mappingsObjects.find(mappingsObject => mappingsObject.service === this._serviceDefinition.name);
+      const redmineMappingsObject = mapping.mappingsObjects.find(mappingsObject => mappingsObject.service === this._syncedServiceDefinition.name);
 
       if (redmineMappingsObject) {
         // find project's mapping - should have same id as timeEntry.projectId
         if ((redmineMappingsObject.id === timeEntry.projectId && redmineMappingsObject.type === this._projectsType)
           || (redmineMappingsObject.id === timeEntry.issueId && redmineMappingsObject.type === this._issuesType)
           || (redmineMappingsObject.id === timeEntry.activityId && redmineMappingsObject.type === this._timeEntryActivitiesType)) {
-          const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._serviceDefinition.name);
+          const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._syncedServiceDefinition.name);
           // push to result all other than 'Redmine'
           mappingsObjectsResult.push(...otherProjectMappingsObjects);
         }

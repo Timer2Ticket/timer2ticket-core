@@ -1,12 +1,14 @@
 import { Constants } from './constants';
 import { Collection, Db, MongoClient, ObjectId } from "mongodb";
-import { User } from '../models/user';
+import { User } from '../models/user/user';
 import { TimeEntrySyncedObject } from '../models/synced_service/time_entry_synced_object/time_entry_synced_object';
 import { JobLog } from '../models/job_log';
+import {Connection} from "../models/connection/connection";
 
 export class DatabaseService {
-  private static _mongoDbName = 'timer2ticketDB';
+  private static _mongoDbName = 'timer2ticketDB_new';
   private static _usersCollectionName = 'users';
+  private static _connectionsCollectionName = 'connections';
   private static _timeEntrySyncedObjectsCollectionName = 'timeEntrySyncedObjects';
   private static _jobLogsCollectionName = 'jobLogs';
 
@@ -16,6 +18,7 @@ export class DatabaseService {
   private _db: Db | undefined;
 
   private _usersCollection: Collection<User> | undefined;
+  private _connectionsCollection: Collection<Connection> | undefined;
   private _timeEntrySyncedObjectsCollection: Collection<TimeEntrySyncedObject> | undefined;
   private _jobLogsCollection: Collection<JobLog> | undefined;
 
@@ -51,6 +54,7 @@ export class DatabaseService {
     this._db = this._mongoClient.db(DatabaseService._mongoDbName);
 
     this._usersCollection = this._db.collection(DatabaseService._usersCollectionName);
+    this._connectionsCollection = this._db.collection(DatabaseService._connectionsCollectionName);
     this._timeEntrySyncedObjectsCollection = this._db.collection(DatabaseService._timeEntrySyncedObjectsCollectionName);
     this._jobLogsCollection = this._db.collection(DatabaseService._jobLogsCollectionName);
 
@@ -65,65 +69,77 @@ export class DatabaseService {
   // USERS *****************************************************
   // ***********************************************************
 
-  async getUserById(userId: string): Promise<User | null> {
+  async getUserById(userId: ObjectId): Promise<User | null> {
     if (!this._usersCollection) return null;
 
-    const filterQuery = { _id: new ObjectId(userId) };
+    const filterQuery = { _id: userId };
     return this._usersCollection.findOne(filterQuery);
   }
 
-  async getUserByUsername(username: string): Promise<User | null> {
-    if (!this._usersCollection) return null;
+  // ***********************************************************
+  // CONNECTIONS ***********************************************
+  // ***********************************************************
 
-    const filterQuery = { username: username };
-    return this._usersCollection.findOne(filterQuery);
+  async getConnectionById(connectionId: ObjectId): Promise<Connection | null> {
+    if (!this._connectionsCollection) return null;
+
+    const filterQuery = { _id: connectionId };
+    return this._connectionsCollection.findOne(filterQuery);
   }
 
-  async getActiveUsers(): Promise<User[]> {
-    if (!this._usersCollection) return [];
+  async getActiveConnections(): Promise<Connection[]> {
+    if (!this._connectionsCollection) return [];
 
-    const filterQuery = { status: 'active' };
-    return this._usersCollection.find(filterQuery).toArray();
+    const filterQuery = { isActive: true };
+    return this._connectionsCollection.find(filterQuery).toArray();
   }
 
-  async updateUser(user: User): Promise<User | null> {
-    if (!this._usersCollection) return null;
-
-    const filterQuery = { _id: new ObjectId(user._id) };
-
-    const result = await this._usersCollection.replaceOne(filterQuery, user);
-    return result.result.ok === 1 ? result.ops[0] : null;
+  async updateConnectionMappings(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: { mappings: connection.mappings } });
+  }
+  async updateConnectionConfigSyncJobLastDone(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: {
+      "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
+        "timeEntrySyncJobDefinition.status": connection.timeEntrySyncJobDefinition.status ,
+    } });
   }
 
-  private async _updateUserPartly(user: User, updateQuery: Record<string, unknown>): Promise<boolean> {
-    if (!this._usersCollection) return false;
+  async updateConnectionTimeEntrySyncJobLastDone(connection: Connection): Promise<boolean> {
+    return this._updateConnectionPartly(connection, { $set: {
+        "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
+        "timeEntrySyncJobDefinition.status": connection.timeEntrySyncJobDefinition.status,
+      } });
+  }
 
-    const filterQuery = { _id: new ObjectId(user._id) };
+  private async _updateConnectionPartly(connection: Connection, updateQuery: Record<string, unknown>): Promise<boolean> {
+    if (!this._connectionsCollection) return false;
 
-    const result = await this._usersCollection.updateOne(filterQuery, updateQuery);
+    const filterQuery = { _id: new ObjectId(connection._id) };
+
+    const result = await this._connectionsCollection.updateOne(filterQuery, updateQuery);
     return result.result.ok === 1;
   }
 
-  async updateUserMappings(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { mappings: user.mappings } });
-  }
+  async cleanUpConnections(): Promise<boolean> {
+    if (!this._connectionsCollection) return false;
 
-  async updateUserConfigSyncJobLastSuccessfullyDone(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { "configSyncJobDefinition.lastSuccessfullyDone": user.configSyncJobDefinition.lastSuccessfullyDone } });
-  }
+    // remove connections with 2 days old deleteTimestamp
+    const deleteTimestampFilter = new Date();
+    deleteTimestampFilter.setDate(deleteTimestampFilter.getDate() - 2);
 
-  async updateUserTimeEntrySyncJobLastSuccessfullyDone(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { "timeEntrySyncJobDefinition.lastSuccessfullyDone": user.timeEntrySyncJobDefinition.lastSuccessfullyDone } });
+    const filterQuery = { deleteTimestamp: { $lt: deleteTimestampFilter.getTime() } };
+    const result = await this._connectionsCollection.deleteMany(filterQuery);
+    return result.result.ok === 1;
   }
 
   // ***********************************************************
   // TIME ENTRY SYNCED OBJECTS *********************************
   // ***********************************************************
 
-  async getTimeEntrySyncedObjects(user: User): Promise<TimeEntrySyncedObject[] | null> {
+  async getTimeEntrySyncedObjects(connection: Connection): Promise<TimeEntrySyncedObject[] | null> {
     if (!this._timeEntrySyncedObjectsCollection) return null;
 
-    const filterQuery = { userId: new ObjectId(user._id) };
+    const filterQuery = { connectionId: new ObjectId(connection._id) };
     return this._timeEntrySyncedObjectsCollection.find(filterQuery).toArray();
   }
 
@@ -195,10 +211,17 @@ export class DatabaseService {
   // JOB LOGS **************************************************
   // ***********************************************************
 
-  async createJobLog(userId: string | ObjectId, type: string, origin: string): Promise<JobLog | null> {
+  async getJobLogById(jobLogId: string): Promise<JobLog | null> {
     if (!this._jobLogsCollection) return null;
 
-    const result = await this._jobLogsCollection.insertOne(new JobLog(userId, type, origin));
+    const filterQuery = { _id: new ObjectId(jobLogId) };
+    return this._jobLogsCollection.findOne(filterQuery);
+  }
+
+  async createJobLog(connectionId: Connection, type: string, origin: string): Promise<JobLog | null> {
+    if (!this._jobLogsCollection) return null;
+
+    const result = await this._jobLogsCollection.insertOne(new JobLog(connectionId, type, origin));
     return result.result.ok === 1 ? result.ops[0] : null;
   }
 
@@ -212,11 +235,15 @@ export class DatabaseService {
   }
 
   async cleanUpJobLogs(): Promise<boolean> {
+    console.log("cleanUpJobLogs")
     if (!this._jobLogsCollection) return false;
 
     // remove 90 days old jobLogs
     const scheduledFilter = new Date();
+    console.log(scheduledFilter);
     scheduledFilter.setDate(scheduledFilter.getDate() - 90);
+    console.log(scheduledFilter);
+    console.log(scheduledFilter.getTime());
 
     const filterQuery = { scheduledDate: { $lt: scheduledFilter.getTime() } };
     const result = await this._jobLogsCollection.deleteMany(filterQuery);

@@ -7,7 +7,9 @@ import { SyncJob } from './jobs/sync_job';
 import { TimeEntriesSyncJob } from './jobs/time_entries_sync_job';
 import { Constants } from './shared/constants';
 import { databaseService } from './shared/database_service';
-import { User } from './models/user';
+import {Connection} from "./models/connection/connection";
+import {Timezone} from "tz-offset";
+import {ObjectId} from "mongodb";
 
 Sentry.init({
   dsn: Constants.sentryDsn,
@@ -34,13 +36,8 @@ cron.schedule('*/10 * * * * *', () => {
     const job = jobQueue.dequeue();
 
     if (job) {
-      databaseService.getUserById(job.userId).then(result => {
-        if(result !== null) {
-          Sentry.setUser({
-            username: result.username,
-          })
-        }
-
+      Sentry.setUser({
+        username: job.userId,
       })
       // console.log(' -> Do the job');
       try {
@@ -87,173 +84,204 @@ app.listen(Constants.appPort, async () => {
     sentryTransaction.finish();
   });
 
-  const activeUsers = await databaseService.getActiveUsers();
+  // schedule once a month connection cleanUp job
+  databaseService.cleanUpConnections();
+  cron.schedule('0 3 3 */1 *', async () => {
+    const sentryTransaction = Sentry.startTransaction({
+      op: 'clean-up-connections',
+      name: 'Clean up connections transaction',
+    });
+    const res = await databaseService.cleanUpConnections();
+    if (!res) {
+      Sentry.captureMessage('Job logs clean up unsuccessful.');
+    }
+    sentryTransaction.finish();
+  });
 
-  activeUsers.forEach(user => {
-    scheduleJobs(user);
+  const connections = await databaseService.getActiveConnections();
+
+  connections.forEach(connection => {
+    scheduleJobs(connection);
   });
 
   return console.log(`Server is listening on ${Constants.appPort}`);
 });
 
 // Schedule config sync job immediately
-app.post('/api/schedule_config_job/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
-  const userId = req.params.userId;
-  const user = await databaseService.getUserById(userId);
+app.post('/api/schedule_config_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+    const jobLogId = req.params.jobLogId;
+    const jobLog = await databaseService.getJobLogById(jobLogId);
 
-  if (!user) {
-    return res.sendStatus(404);
-  }
+    if (!jobLog) {
+        return res.sendStatus(404);
+    }
 
-  // schedule CSJ right now
-  const jobLog = await databaseService.createJobLog(user._id, 'config', 'manual');
-  if (!jobLog) {
-    return res.sendStatus(503);
-  }
+    const connection = await databaseService.getConnectionById(jobLog.connectionId);
+    if (!connection) {
+        return res.sendStatus(404);
+    }
 
-  jobQueue.enqueue(new ConfigSyncJob(user, jobLog));
+    const user = await databaseService.getUserById(connection.userId);
+    if (!user) {
+        return res.sendStatus(404);
+    }
 
-  return res.send('User\'s config sync job scheduled successfully.');
+    jobQueue.enqueue(new ConfigSyncJob(user, connection, jobLog));
+
+    return res.send('User\'s config sync job scheduled successfully.');
 });
 
 // Schedule time entry sync job immediately
-app.post('/api/schedule_time_entries_job/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
-  const userId = req.params.userId;
-  const user = await databaseService.getUserById(userId);
+app.post('/api/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+    const jobLogId = req.params.jobLogId;
+    const jobLog = await databaseService.getJobLogById(jobLogId);
 
-  if (!user) {
-    return res.sendStatus(404);
-  }
+    if (!jobLog) {
+        return res.sendStatus(404);
+    }
 
-  // schedule only if at least one configSyncJob finished
-  if (!user.configSyncJobDefinition.lastSuccessfullyDone) {
-    return res.sendStatus(409);
-  }
+    const connection = await databaseService.getConnectionById(jobLog.connectionId);
+    if (!connection) {
+        return res.sendStatus(404);
+    }
 
-  // schedule TESJ right now
-  const jobLog = await databaseService.createJobLog(user._id, 'time-entries', 'manual');
-  if (!jobLog) {
-    return res.sendStatus(503);
-  }
-  jobQueue.enqueue(new TimeEntriesSyncJob(user, jobLog));
+    const user = await databaseService.getUserById(connection.userId);
+    if (!user) {
+        return res.sendStatus(404);
+    }
+
+    jobQueue.enqueue(new TimeEntriesSyncJob(user, connection, jobLog));
 
   return res.send('User\'s time entries sync job scheduled successfully.');
 });
 
-// Schedule jobs for given user
-app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
-  const userId = req.params.userId;
-  // config probably changed 
-  // => stop all scheduled cron tasks 
-  // => get updated user from DB 
+app.post('/api/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+    const connectionId = req.params.connectionId;
+
+    const responseCode = await updateConnection(connectionId, true);
+    if(responseCode === null) {
+        return res.sendStatus(201);
+    }
+    return res.sendStatus(responseCode);
+
+});
+
+// Schedule jobs for connection
+app.post('/api/update/', async (req: Request, res: Response) => {
+  const connectionIds = req.body.connectionIds;
+  // config probably changed
+  // => stop all scheduled cron tasks
+  // => get updated user from DB
   // => start jobs again
 
-  const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
-  const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
-
-  if (configTask) {
-    // should address error: #20471
-    // using this fix: https://github.com/node-cron/node-cron/pull/289
-    configTask.stop();
-    activeUsersScheduledConfigSyncTasks.delete(userId);
-  }
-  if (timeEntriesTask) {
-    timeEntriesTask.stop();
-    activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
+  const unsuccesfulConnectionIds = [];
+  for( const connectionId of connectionIds) {
+    const responseCode = await updateConnection(connectionId, false);
+    if(responseCode !== null) {
+        unsuccesfulConnectionIds.push(connectionId);
+    }
   }
 
-  const user = await databaseService.getUserById(userId);
+  if(unsuccesfulConnectionIds.length > 0) {
+      return res.status(500).send(`Failed to update connections: ${unsuccesfulConnectionIds.join(', ')}`);
 
-  if (!user) {
-    return res.sendStatus(404);
+  } else {
+      return res.send('Connections updated successfully.');
   }
-
-  // schedule CSJ right now
-  const jobLog = await databaseService.createJobLog(user._id, 'config', 't2t-auto');
-  if (!jobLog) {
-    return res.sendStatus(503);
-  }
-  jobQueue.enqueue(new ConfigSyncJob(user, jobLog));
-  // and schedule next CSJs and TESJs by the user's normal schedule
-  scheduleJobs(user);
-
-  return res.send('User\'s jobs started successfully.');
 });
 
-// Stop all jobs for given user
-app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
-  const userId = req.params.userId;
-  // config probably changed 
-  // => stop all scheduled cron tasks
+async function updateConnection(connectionId: string, isCreated:boolean): Promise<number | null> {
+    const configTask = activeUsersScheduledConfigSyncTasks.get(connectionId);
+    const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(connectionId);
 
-  const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
-  const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
+    let connectionObjectId;
+    try {
+        connectionObjectId = new ObjectId(connectionId);
+    } catch (ex) {
+        return 404;
+    }
 
-  if (!configTask && !timeEntriesTask) {
-    return res.status(404).send('No jobs found for this user.');
-  }
+    if (configTask) {
+        // should address error: #20471
+        // using this fix: https://github.com/node-cron/node-cron/pull/289
+        configTask.stop();
+        activeUsersScheduledConfigSyncTasks.delete(connectionId);
+    }
+    if (timeEntriesTask) {
+        timeEntriesTask.stop();
+        activeUsersScheduledTimeEntriesSyncTasks.delete(connectionId);
+    }
 
-  if (configTask) {
-    // should address error: #20471
-    // using this fix: https://github.com/node-cron/node-cron/pull/289
-    configTask.stop();
-    activeUsersScheduledConfigSyncTasks.delete(userId);
-  }
-  if (timeEntriesTask) {
-    timeEntriesTask.stop();
-    activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
-  }
+    const connection = await databaseService.getConnectionById(connectionObjectId);
+    if(!connection) {
+        return 404;
+    }
 
-  return res.send('User\'s jobs stopped successfully.');
-});
+    const user = await databaseService.getUserById(connection.userId);
+    if (!user) {
+        return 404;
+    }
 
-// Returns 204 if both config and TE jobs are scheduled for given user
-app.post('/api/scheduled/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
-  const userId = req.params.userId;
+    // schedule CSJ right now
+    const jobLog = await databaseService.createJobLog(connection, 'config', 't2t-auto');
+    if (!jobLog) {
+        return 503;
+    }
+    jobQueue.enqueue(new ConfigSyncJob(user, connection, jobLog));
+    // and schedule next CSJs and TESJs by the user's normal schedule
 
-  const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
-  const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
+    if(isCreated) {
+        scheduleJobs(connection);
+    }
+    return null;
+}
 
-  if (configTask && timeEntriesTask) {
-    return res.send({ scheduled: true });
-  }
+async function scheduleJobs(connection: Connection) {
+    // console.log(`SCHEDULE jobs for user ${user.username} with id=${user._id}`);
+    const actualUser = await databaseService.getUserById(connection.userId);
+    if (!actualUser) {
+        return;
+    }
 
-  // return 200 OK if jobs are not scheduled (technically not error or something)
-  return res.send({ scheduled: false });
-});
 
-function scheduleJobs(user: User) {
-  // console.log(`SCHEDULE jobs for user ${user.username} with id=${user._id}`);
+    // cron schedule validation can be omitted (schedule is already validated when user - and schedule too - is updated)
+    if (cron.validate(connection.configSyncJobDefinition.schedule)) {
+        const task = cron.schedule(
+            connection.configSyncJobDefinition.schedule,
+            async () => {
+                // grab fresh user with all updated values
+                const actualConnection = await databaseService.getConnectionById(connection._id);
+                if (actualConnection) {
+                    const jobLog = await databaseService.createJobLog(actualConnection, 'config', 't2t-auto');
+                    if (jobLog) {
+                        // console.log(' -> Added ConfigSyncJob');
+                        jobQueue.enqueue(new ConfigSyncJob(actualUser, connection, jobLog));
+                    }
+                }
+            }, {
+                timezone: actualUser.timeZone,
+            }
+        );
+        activeUsersScheduledConfigSyncTasks.set(connection._id.toString(), task);
+    }
 
-  // cron schedule validation can be omitted (schedule is already validated when user - and schedule too - is updated)
-  if (cron.validate(user.configSyncJobDefinition.schedule)) {
-    const task = cron.schedule(user.configSyncJobDefinition.schedule, async () => {
-      // grab fresh user with all updated values
-      const actualUser = await databaseService.getUserById(user._id.toString());
-      if (actualUser) {
-        const jobLog = await databaseService.createJobLog(user._id, 'config', 't2t-auto');
-        if (jobLog) {
-          // console.log(' -> Added ConfigSyncJob');
-          jobQueue.enqueue(new ConfigSyncJob(actualUser, jobLog));
-        }
-      }
-    });
-    activeUsersScheduledConfigSyncTasks.set(user._id.toString(), task);
-  }
-
-  if (cron.validate(user.timeEntrySyncJobDefinition.schedule)) {
-    const task = cron.schedule(user.timeEntrySyncJobDefinition.schedule, async () => {
-      // grab fresh user from the db to see his lastSuccessfullyDone
-      const actualUser = await databaseService.getUserById(user._id.toString());
-      // check if not null => there was at least 1 successful config job done => basic mappings should be there
-      if (actualUser?.configSyncJobDefinition.lastSuccessfullyDone) {
-        const jobLog = await databaseService.createJobLog(user._id, 'time-entries', 't2t-auto');
-        if (jobLog) {
-          // console.log(' -> Added TESyncJob');
-          jobQueue.enqueue(new TimeEntriesSyncJob(actualUser, jobLog));
-        }
-      }
-    });
-    activeUsersScheduledTimeEntriesSyncTasks.set(user._id.toString(), task);
-  }
+    if (cron.validate(connection.timeEntrySyncJobDefinition.schedule)) {
+        const task = cron.schedule(
+            connection.timeEntrySyncJobDefinition.schedule,
+            async () => {
+                // grab fresh user with all updated values
+                const actualConnection = await databaseService.getConnectionById(connection._id);
+                if (actualConnection) {
+                    const jobLog = await databaseService.createJobLog(actualConnection, 'config', 't2t-auto');
+                    if (jobLog) {
+                        // console.log(' -> Added ConfigSyncJob');
+                        jobQueue.enqueue(new TimeEntriesSyncJob(actualUser, connection, jobLog));
+                    }
+                }
+            }, {
+                timezone: actualUser.timeZone,
+            }
+        );
+        activeUsersScheduledTimeEntriesSyncTasks.set(connection._id.toString(), task);
+    }
 }

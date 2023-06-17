@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { databaseService } from "../shared/database_service";
 import {Timer2TicketError} from "./timer2TicketError";
+import {Connection} from "./connection/connection";
 
 export class JobLog {
   // Mongo
@@ -25,8 +26,12 @@ export class JobLog {
   // currently not used
   errors: Array<Timer2TicketError>;
 
-  constructor(userId: string | ObjectId, type: string, origin: string) {
-    this.userId = userId;
+  constructor(connection:Connection, type: string, origin: string) {
+    this.userId = connection.userId;
+    this.connectionId = connection._id;
+    this.userConnectionId = connection.userConnectionId;
+    this.connectionBetween = Connection.getConnectionBetweenString(connection);
+
     this.type = type;
     this.origin = origin;
 
@@ -42,14 +47,14 @@ export class JobLog {
    * Also makes changes to the DB.
    * @returns Promise<JobLog> DB object if update operation was successful. Else Promise<null>.
    */
-  async setToRunning(): Promise<JobLog | null> {
-    if (this.status !== 'scheduled') {
+  static async setToRunning(jobLog: JobLog): Promise<JobLog | null> {
+    if (jobLog.status !== 'scheduled') {
       return null;
     }
 
-    this.status = 'running';
-    this.started = new Date().getTime();
-    return await databaseService.updateJobLog(this);
+    jobLog.status = 'running';
+    jobLog.started = new Date().getTime();
+    return await databaseService.updateJobLog(jobLog);
   }
 
   /**
@@ -58,13 +63,13 @@ export class JobLog {
    * @param isSuccessful flag if job was successful. Default true.
    * @returns Promise<JobLog> DB object if update operation was successful. Else Promise<null>.
    */
-  async setToCompleted(isSuccessful = true): Promise<JobLog | null> {
-    if (this.status !== 'running') {
+  static async setToCompleted(jobLog: JobLog, isSuccessful = true): Promise<JobLog | null> {
+    if (jobLog.status !== 'running') {
       return null;
     }
 
-    this.status = isSuccessful ? 'successful' : 'unsuccessful';
-    this.completed = new Date().getTime();
-    return await databaseService.updateJobLog(this);
+    jobLog.status = isSuccessful ? 'successful' : 'unsuccessful';
+    jobLog.completed = new Date().getTime();
+    return await databaseService.updateJobLog(jobLog);
   }
 }
