@@ -1,6 +1,5 @@
 import { ObjectId } from 'mongodb';
 import {NotificationSettings} from "./notification_settings";
-import {Timezone} from "tz-offset";
 export class User {
   // Mongo
   _id!: ObjectId;
@@ -12,7 +11,7 @@ export class User {
   // User info
   email!: string | null;
   registratedDate!: Date;
-  timeZone!: Timezone;
+  timeZone!: string;
   notifiactionSettings!: NotificationSettings;
 
   // Connection user id
