@@ -1,22 +1,22 @@
 import * as Sentry from '@sentry/node';
-import express, { Request, Response } from 'express';
-import { Queue } from 'typescript-collections';
+import express, {Request, Response} from 'express';
+import {Queue} from 'typescript-collections';
 import cron from 'node-cron';
-import { ConfigSyncJob } from './jobs/config_sync_job';
-import { SyncJob } from './jobs/sync_job';
-import { TimeEntriesSyncJob } from './jobs/time_entries_sync_job';
-import { Constants } from './shared/constants';
-import { databaseService } from './shared/database_service';
+import {ConfigSyncJob} from './jobs/config_sync_job';
+import {SyncJob} from './jobs/sync_job';
+import {TimeEntriesSyncJob} from './jobs/time_entries_sync_job';
+import {Constants} from './shared/constants';
+import {databaseService} from './shared/database_service';
 import {Connection} from "./models/connection/connection";
 import {ObjectId} from "mongodb";
 
 Sentry.init({
-  dsn: Constants.sentryDsn,
-  tracesSampleRate: 0.5,
+    dsn: Constants.sentryDsn,
+    tracesSampleRate: 0.5,
 });
 
 const app = express();
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({extended: false}));
 app.use(express.json());
 
 // queue for ConfigSyncJobs (CSJs) or TimeEntriesSyncJobs (TESJs)
@@ -31,83 +31,83 @@ const activeUsersScheduledTimeEntriesSyncTasks = new Map<string, cron.ScheduledT
 
 // every 10 seconds check if jobQueue is not empty
 cron.schedule('*/10 * * * * *', () => {
-  while (!jobQueue.isEmpty()) {
-    const job = jobQueue.dequeue();
+    while (!jobQueue.isEmpty()) {
+        const job = jobQueue.dequeue();
 
-    if (job) {
-      Sentry.setUser({
-        username: job.userId,
-      })
-      // console.log(' -> Do the job');
-      try {
-        job.start().then(res => {
-          if (res) {
-            // console.log(' -> Job successfully done.');
-            return;
-          }
+        if (job) {
+            Sentry.setUser({
+                username: job.userId,
+            })
+            // console.log(' -> Do the job');
+            try {
+                job.start().then(res => {
+                    if (res) {
+                        // console.log(' -> Job successfully done.');
+                        return;
+                    }
 
-          // not successful, try to repeat it
-          // console.log(' -> Repeating job');
-          job.start().then(resRepeated => {
-            if (resRepeated) {
-              // console.log(' -> Job repeated and now successfully done.');
-              return;
+                    // not successful, try to repeat it
+                    // console.log(' -> Repeating job');
+                    job.start().then(resRepeated => {
+                        if (resRepeated) {
+                            // console.log(' -> Job repeated and now successfully done.');
+                            return;
+                        }
+
+                        // console.log(' -> Job unsuccessful.');
+                        // Sentry.captureMessage(`Job unsuccessful for user: ${job.userId}`);
+                    });
+                });
+            } catch (ex) {
+                Sentry.captureException(ex);
             }
-
-            // console.log(' -> Job unsuccessful.');
-            // Sentry.captureMessage(`Job unsuccessful for user: ${job.userId}`);
-          });
-        });
-      } catch (ex) {
-        Sentry.captureException(ex);
-      }
+        }
     }
-  }
 });
 
 // App init
 app.listen(Constants.appPort, async () => {
-  await databaseService.init();
+    await databaseService.init();
 
-  // schedule once a month jobLogs cleanUp job
-  databaseService.cleanUpJobLogs();
-  cron.schedule('0 3 3 */1 *', async () => {
-    const sentryTransaction = Sentry.startTransaction({
-      op: 'clean-up-job-logs',
-      name: 'Clean up job logs transaction',
+    // schedule once a month jobLogs cleanUp job
+    databaseService.cleanUpJobLogs();
+    cron.schedule('0 3 3 */1 *', async () => {
+        const sentryTransaction = Sentry.startTransaction({
+            op: 'clean-up-job-logs',
+            name: 'Clean up job logs transaction',
+        });
+        const res = await databaseService.cleanUpJobLogs();
+        if (!res) {
+            Sentry.captureMessage('Job logs clean up unsuccessful.');
+        }
+        sentryTransaction.finish();
     });
-    const res = await databaseService.cleanUpJobLogs();
-    if (!res) {
-      Sentry.captureMessage('Job logs clean up unsuccessful.');
-    }
-    sentryTransaction.finish();
-  });
 
-  // schedule once a month connection cleanUp job
-  databaseService.cleanUpConnections();
-  cron.schedule('0 3 3 */1 *', async () => {
-    const sentryTransaction = Sentry.startTransaction({
-      op: 'clean-up-connections',
-      name: 'Clean up connections transaction',
+    // schedule once a month connection cleanUp job
+    databaseService.cleanUpConnections();
+    cron.schedule('0 3 3 */1 *', async () => {
+        const sentryTransaction = Sentry.startTransaction({
+            op: 'clean-up-connections',
+            name: 'Clean up connections transaction',
+        });
+        const res = await databaseService.cleanUpConnections();
+        if (!res) {
+            Sentry.captureMessage('Job logs clean up unsuccessful.');
+        }
+        sentryTransaction.finish();
     });
-    const res = await databaseService.cleanUpConnections();
-    if (!res) {
-      Sentry.captureMessage('Job logs clean up unsuccessful.');
-    }
-    sentryTransaction.finish();
-  });
 
-  const connections = await databaseService.getActiveConnections();
+    const connections = await databaseService.getActiveConnections();
 
-  connections.forEach(connection => {
-    scheduleJobs(connection);
-  });
+    connections.forEach(connection => {
+        scheduleJobs(connection);
+    });
 
-  return console.log(`Server is listening on ${Constants.appPort}`);
+    return console.log(`Server is listening on ${Constants.appPort}`);
 });
 
 // Schedule config sync job immediately
-app.post('/api/schedule_config_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+app.post('/api/v2/schedule_config_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
     const jobLogId = req.params.jobLogId;
     const jobLog = await databaseService.getJobLogById(jobLogId);
 
@@ -131,7 +131,7 @@ app.post('/api/schedule_config_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Requ
 });
 
 // Schedule time entry sync job immediately
-app.post('/api/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+app.post('/api/v2/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
     const jobLogId = req.params.jobLogId;
     const jobLog = await databaseService.getJobLogById(jobLogId);
 
@@ -151,45 +151,46 @@ app.post('/api/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (req
 
     jobQueue.enqueue(new TimeEntriesSyncJob(user, connection, jobLog));
 
-  return res.send('User\'s time entries sync job scheduled successfully.');
+    return res.send('User\'s time entries sync job scheduled successfully.');
 });
 
-app.post('/api/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+// Schedule jobs for connection
+app.post('/api/v2/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
     const connectionId = req.params.connectionId;
 
     const responseCode = await updateConnection(connectionId, true);
-    if(responseCode === null) {
+    if (responseCode === null) {
         return res.sendStatus(201);
     }
     return res.sendStatus(responseCode);
 
 });
 
-// Schedule jobs for connection
-app.post('/api/update/', async (req: Request, res: Response) => {
-  const connectionIds = req.body.connectionIds;
-  // config probably changed
-  // => stop all scheduled cron tasks
-  // => get updated user from DB
-  // => start jobs again
+// Schedule jobs for connections
+app.post('/api/v2/update/', async (req: Request, res: Response) => {
+    const connectionIds = req.body.connectionIds;
+    // config probably changed
+    // => stop all scheduled cron tasks
+    // => get updated user from DB
+    // => start jobs again
 
-  const unsuccesfulConnectionIds = [];
-  for( const connectionId of connectionIds) {
-    const responseCode = await updateConnection(connectionId, false);
-    if(responseCode !== null) {
-        unsuccesfulConnectionIds.push(connectionId);
+    const unsuccesfulConnectionIds = [];
+    for (const connectionId of connectionIds) {
+        const responseCode = await updateConnection(connectionId, false);
+        if (responseCode !== null) {
+            unsuccesfulConnectionIds.push(connectionId);
+        }
     }
-  }
 
-  if(unsuccesfulConnectionIds.length > 0) {
-      return res.status(500).send(`Failed to update connections: ${unsuccesfulConnectionIds.join(', ')}`);
+    if (unsuccesfulConnectionIds.length > 0) {
+        return res.status(500).send(`Failed to update connections: ${unsuccesfulConnectionIds.join(', ')}`);
 
-  } else {
-      return res.send('Connections updated successfully.');
-  }
+    } else {
+        return res.send('Connections updated successfully.');
+    }
 });
 
-async function updateConnection(connectionId: string, isCreated:boolean): Promise<number | null> {
+async function updateConnection(connectionId: string, isCreated: boolean): Promise<number | null> {
     const configTask = activeUsersScheduledConfigSyncTasks.get(connectionId);
     const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(connectionId);
 
@@ -212,7 +213,7 @@ async function updateConnection(connectionId: string, isCreated:boolean): Promis
     }
 
     const connection = await databaseService.getConnectionById(connectionObjectId);
-    if(!connection) {
+    if (!connection) {
         return 404;
     }
 
@@ -226,12 +227,15 @@ async function updateConnection(connectionId: string, isCreated:boolean): Promis
     if (!jobLog) {
         return 503;
     }
-    jobQueue.enqueue(new ConfigSyncJob(user, connection, jobLog));
-    // and schedule next CSJs and TESJs by the user's normal schedule
+    if (connection.isActive && isCreated) {
+        jobQueue.enqueue(new ConfigSyncJob(user, connection, jobLog));
+    }
 
-    if(isCreated) {
+    // and schedule next CSJs and TESJs by the user's normal schedule
+    if(connection.isActive) {
         scheduleJobs(connection);
     }
+
     return null;
 }
 
@@ -241,7 +245,6 @@ async function scheduleJobs(connection: Connection) {
     if (!actualUser) {
         return;
     }
-
 
     // cron schedule validation can be omitted (schedule is already validated when user - and schedule too - is updated)
     if (cron.validate(connection.configSyncJobDefinition.schedule)) {
