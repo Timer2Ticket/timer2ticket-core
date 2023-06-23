@@ -90,7 +90,17 @@ app.listen(Constants.appPort, async () => {
             op: 'clean-up-connections',
             name: 'Clean up connections transaction',
         });
-        const res = await databaseService.cleanUpConnections();
+        let res = true;
+
+        const connectionsToDelete = await databaseService.getConnectionsToDelete();
+        for(const connection of connectionsToDelete) {
+            res = res && await databaseService.deleteTimeEntrySyncedObjectByConnection(connection._id);
+        }
+
+        const cleanUpConnectionsResult = await databaseService.cleanUpConnections();
+        if(!cleanUpConnectionsResult) {
+            res = false;
+        }
         if (!res) {
             Sentry.captureMessage('Job logs clean up unsuccessful.');
         }
@@ -222,12 +232,12 @@ async function updateConnection(connectionId: string, isCreated: boolean): Promi
         return 404;
     }
 
-    // schedule CSJ right now
-    const jobLog = await databaseService.createJobLog(connection, 'config', 't2t-auto');
-    if (!jobLog) {
-        return 503;
-    }
     if (connection.isActive && isCreated) {
+        // schedule CSJ right now
+        const jobLog = await databaseService.createJobLog(connection, 'config', 't2t-auto');
+        if (!jobLog) {
+            return 503;
+        }
         jobQueue.enqueue(new ConfigSyncJob(user, connection, jobLog));
     }
 
@@ -274,7 +284,7 @@ async function scheduleJobs(connection: Connection) {
                 // grab fresh user with all updated values
                 const actualConnection = await databaseService.getConnectionById(connection._id);
                 if (actualConnection) {
-                    const jobLog = await databaseService.createJobLog(actualConnection, 'config', 't2t-auto');
+                    const jobLog = await databaseService.createJobLog(actualConnection, 'time-entries', 't2t-auto');
                     if (jobLog) {
                         // console.log(' -> Added ConfigSyncJob');
                         jobQueue.enqueue(new TimeEntriesSyncJob(actualUser, connection, jobLog));

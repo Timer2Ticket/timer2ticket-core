@@ -74,8 +74,10 @@ export class TimeEntriesSyncJob extends SyncJob {
     // get all TESOs from DB for connection
     const timeEntrySyncedObjects = await databaseService.getTimeEntrySyncedObjects(this._connection);
 
-    if (!timeEntrySyncedObjects) return false;
-
+    if (!timeEntrySyncedObjects) {
+      await this.updateConnectionConfigSyncJobLastDone(false);
+      return false;
+    }
     for (const timeEntrySyncedObject of timeEntrySyncedObjects) {
       const timeEntrySyncedObjectWrapper = new TimeEntrySyncedObjectWrapper(timeEntrySyncedObject);
 
@@ -166,15 +168,20 @@ export class TimeEntriesSyncJob extends SyncJob {
       }
     }
 
+    await this.updateConnectionConfigSyncJobLastDone(operationsOk);
+
+    return operationsOk;
+  }
+
+  private async updateConnectionConfigSyncJobLastDone(status: boolean) {
+
     this._connection.timeEntrySyncJobDefinition.lastJobTime = new Date().getTime();
     this._connection.timeEntrySyncJobDefinition.status = "ERROR";
-    if (operationsOk) {
+    if (status) {
       this._connection.timeEntrySyncJobDefinition.status = "SUCCESS";
     }
 
-    databaseService.updateConnectionTimeEntrySyncJobLastDone(this._connection);
-
-    return operationsOk;
+    await databaseService.updateConnectionTimeEntrySyncJobLastDone(this._connection);
   }
 
   /**

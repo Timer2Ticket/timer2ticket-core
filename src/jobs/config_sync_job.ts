@@ -24,7 +24,7 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
-    // console.log('[OMR] config_sync_job started for user '.concat(this._user._id.toHexString()));
+    // console.log('[OMR] config_sync_job started for connection '.concat(this._connection._id.toHexString()));
     const primaryServiceDefinition: SyncedServiceDefinition | undefined = Connection.getPrimaryServiceDefinition(this._connection);
 
     if (!primaryServiceDefinition) {
@@ -40,6 +40,7 @@ export class ConfigSyncJob extends SyncJob {
     if (typeof objectsToSync === "boolean") {
       const message = 'Problem occurred while getting primary service objects.';
       this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
 
@@ -51,6 +52,7 @@ export class ConfigSyncJob extends SyncJob {
     if (typeof allServiceObjects === "boolean") {
       const message = 'Problem occurred while getting secondary service objects';
       this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
 
@@ -203,13 +205,7 @@ export class ConfigSyncJob extends SyncJob {
               === undefined);
     }
 
-    this._connection.timeEntrySyncJobDefinition.lastJobTime = new Date().getTime();
-    this._connection.timeEntrySyncJobDefinition.status = "ERROR";
-    if (operationsOk) {
-      this._connection.timeEntrySyncJobDefinition.status = "SUCCESS";
-    }
-
-    databaseService.updateConnectionConfigSyncJobLastDone(this._connection);
+    await this.updateConnectionConfigSyncJobLastDone(operationsOk);
 
     // persist changes in the mappings
     // even if some api operations were not ok, persist changes to the mappings - better than nothing
@@ -218,6 +214,16 @@ export class ConfigSyncJob extends SyncJob {
     await databaseService.updateJobLog(this._jobLog);
 
     return operationsOk;
+  }
+
+  private async updateConnectionConfigSyncJobLastDone(status: boolean) {
+    this._connection.configSyncJobDefinition.lastJobTime = new Date().getTime();
+    this._connection.configSyncJobDefinition.status = "ERROR";
+    if (status) {
+      this._connection.configSyncJobDefinition.status = "SUCCESS";
+    }
+
+    await databaseService.updateConnectionConfigSyncJobLastDone(this._connection);
   }
 
   /**

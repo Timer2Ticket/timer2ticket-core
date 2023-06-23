@@ -99,8 +99,8 @@ export class DatabaseService {
   }
   async updateConnectionConfigSyncJobLastDone(connection: Connection): Promise<boolean> {
     return this._updateConnectionPartly(connection, { $set: {
-      "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
-        "timeEntrySyncJobDefinition.status": connection.timeEntrySyncJobDefinition.status ,
+      "configSyncJobDefinition.lastJobTime": connection.configSyncJobDefinition.lastJobTime,
+        "configSyncJobDefinition.status": connection.configSyncJobDefinition.status ,
     } });
   }
 
@@ -118,6 +118,17 @@ export class DatabaseService {
 
     const result = await this._connectionsCollection.updateOne(filterQuery, updateQuery);
     return result.result.ok === 1;
+  }
+
+  async getConnectionsToDelete(): Promise<Connection[]> {
+    if (!this._connectionsCollection) return [];
+
+    // remove connections with 2 days old deleteTimestamp
+    const deleteTimestampFilter = new Date();
+    deleteTimestampFilter.setDate(deleteTimestampFilter.getDate() - 2);
+
+    const filterQuery = { deleteTimestamp: { $lt: deleteTimestampFilter.getTime() } };
+    return this._connectionsCollection.find(filterQuery).toArray();
   }
 
   async cleanUpConnections(): Promise<boolean> {
@@ -196,6 +207,15 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
+  async deleteTimeEntrySyncedObjectByConnection(connectionId: ObjectId) {
+    if (!this._timeEntrySyncedObjectsCollection) return false;
+
+    const filterQuery = { connectionId: connectionId };
+
+    const result = await this._timeEntrySyncedObjectsCollection.deleteMany(filterQuery);
+    return result.result.ok === 1;
+  }
+
   async getTimeEntrySyncedObjectForArchiving(steoId: number | string, serviceName: string, userIdInput: string | ObjectId): Promise<TimeEntrySyncedObject | null>
   {
     if (!this._timeEntrySyncedObjectsCollection) return null;
@@ -235,15 +255,11 @@ export class DatabaseService {
   }
 
   async cleanUpJobLogs(): Promise<boolean> {
-    console.log("cleanUpJobLogs")
     if (!this._jobLogsCollection) return false;
 
     // remove 90 days old jobLogs
     const scheduledFilter = new Date();
-    console.log(scheduledFilter);
     scheduledFilter.setDate(scheduledFilter.getDate() - 90);
-    console.log(scheduledFilter);
-    console.log(scheduledFilter.getTime());
 
     const filterQuery = { scheduledDate: { $lt: scheduledFilter.getTime() } };
     const result = await this._jobLogsCollection.deleteMany(filterQuery);
