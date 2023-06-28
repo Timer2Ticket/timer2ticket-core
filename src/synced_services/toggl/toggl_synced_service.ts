@@ -22,8 +22,7 @@ export class TogglTrackSyncedService implements SyncedService {
   private _meTimeEntriesUri: string;
   private _projectsUri: string;
   private _tagsUri: string;
-  private _reportsUri: string;
-
+  private _reportsSearchTimeEntryUri: string;
   private _projectsType: string;
   private _tagsType: string;
 
@@ -42,7 +41,7 @@ export class TogglTrackSyncedService implements SyncedService {
     this._meTimeEntriesUri = `${this._userUri}/time_entries`;
     this._projectsUri = `${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/projects`;
     this._tagsUri = `${this._workspacesUri}/${this._serviceDefinition.config.workspace?.id}/tags`;
-    this._reportsUri = `${this._baseUri}reports/api/v2/details`;
+    this._reportsSearchTimeEntryUri = `${this._baseUri}reports/api/v3/workspace/${this._serviceDefinition.config.workspace?.id}/search/time_entries`;
 
     this._projectsType = 'project';
     this._tagsType = 'tag';
@@ -338,47 +337,55 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
-  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
+  async getTimeEntryById(id: number | string, start: Date): Promise<TimeEntry | null> {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 364); // Max time range is 365 days
+
     const queryParams = {
-      time_entry_ids: id,
-      since: start?.toISOString(),
-      workspace_id: this._serviceDefinition.config.workspace?.id,
-      user_ids: this._serviceDefinition.config.userId,
-      user_agent: 'Timer2Ticket',
-      page: 0,
+      time_entry_ids: [id],
+      start_date: start.toISOString().slice(0, 10), // format YYYY-MM-DD
+      end_date: end.toISOString().slice(0, 10), // format YYYY-MM-DD
     };
-
-    const entries: TogglTimeEntry[] = [];
-
-    // time entries via reports (requesting only one object => do not paginate)
 
     let response;
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
-              .get(this._reportsUri)
-              .query(queryParams)
+              .post(this._reportsSearchTimeEntryUri)
               .auth(this._serviceDefinition.apiKey, 'api_token')
+              .send(queryParams)
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getTimeEntryById');
       return null;
     }
 
+    //const allTags: ServiceObject[] = await this._getAllTags() as ServiceObject[];
 
-    response.body?.data.forEach((timeEntry: never) => {
-      entries.push(
-        new TogglTimeEntry(
+    const entries: TogglTimeEntry[] = [];
+    response.body.forEach((timeEntryInfo: never) => {
+      const timeEntries: never[] = timeEntryInfo['time_entries'];
+      if (!timeEntries || timeEntries.length === 0) {
+        return null;
+      }
+      const timeEntry = timeEntries[0];
+
+      const tagIds: number[] = (timeEntryInfo['tag_ids']);
+
+      const entry = new TogglTimeEntry(
           timeEntry['id'],
-          timeEntry['pid'],
-          timeEntry['description'],
+          timeEntryInfo['project_id'],
+          timeEntryInfo['description'],
           new Date(timeEntry['start']),
-          new Date(timeEntry['end']),
-          timeEntry['dur'],
-          timeEntry['tags'],
-          new Date(timeEntry['updated']),
-        ),
+          new Date(timeEntry['stop']),
+          timeEntry['seconds'] * 1000,
+          tagIds,
+          new Date(timeEntry['at']),
+      );
+
+      entries.push(
+          entry
       );
     });
 
@@ -467,9 +474,9 @@ export class TogglTrackSyncedService implements SyncedService {
           const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._serviceDefinition.name);
           // push to result all other than 'TogglTrack'
           mappingsObjectsResult.push(...otherProjectMappingsObjects);
-        } else if (togglMappingsObject.type !== this._projectsType && timeEntry.tags) {
+        } else if (togglMappingsObject.type !== this._projectsType && timeEntry.tagIds) {
           // find other mappings in timeEntry's tags -> issues, time entry activity
-          if (timeEntry.tags.find(tag => tag === togglMappingsObject.name)) {
+          if (timeEntry.tagIds.find(tagId => tagId === togglMappingsObject.id)) {
             const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._serviceDefinition.name);
             // push to result all other than 'TogglTrack'
             mappingsObjectsResult.push(...otherProjectMappingsObjects);
