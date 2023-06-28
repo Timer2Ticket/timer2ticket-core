@@ -337,13 +337,13 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
-  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
-    const end = new Date(start!);
+  async getTimeEntryById(id: number | string, start: Date): Promise<TimeEntry | null> {
+    const end = new Date(start);
     end.setDate(end.getDate() + 364); // Max time range is 365 days
 
     const queryParams = {
       time_entry_ids: [id],
-      start_date: start?.toISOString().slice(0, 10), // format YYYY-MM-DD
+      start_date: start.toISOString().slice(0, 10), // format YYYY-MM-DD
       end_date: end.toISOString().slice(0, 10), // format YYYY-MM-DD
     };
 
