@@ -7,17 +7,17 @@ export class TogglTimeEntry implements TimeEntry {
   start: Date;
   end: Date;
   durationInMilliseconds: number;
-  tagIds: number[];
+  tags: string[];
   lastUpdated: Date;
 
-  constructor(id: number, projectId: number, text: string, start: Date, end: Date, duration: number, tagIds: number[], lastUpdated: Date) {
+  constructor(id: number, projectId: number, text: string, start: Date, end: Date, duration: number, tags: string[], lastUpdated: Date) {
     this.id = id;
     this.projectId = projectId;
     this.text = text;
     this.start = start;
     this.end = end;
     this.durationInMilliseconds = duration;
-    this.tagIds = tagIds;
+    this.tags = tags;
     this.lastUpdated = lastUpdated;
   }
 

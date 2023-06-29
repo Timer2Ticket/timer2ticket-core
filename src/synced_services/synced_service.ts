@@ -54,7 +54,7 @@ export interface SyncedService {
   /**
    * Returns only one time entry based on given id
    */
-  getTimeEntryById(id: number | string, start: Date): Promise<TimeEntry | null>;
+  getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null>;
 
   /**
    * Create a new time entry real object in the service, returns specific TimeEntry
