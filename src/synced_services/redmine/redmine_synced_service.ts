@@ -321,7 +321,7 @@ export class RedmineSyncedService implements SyncedService {
     return entries;
   }
 
-  async getTimeEntryById(id: number | string, start: Date): Promise<TimeEntry | null> {
+  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
     let response;
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(

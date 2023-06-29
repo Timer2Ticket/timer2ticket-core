@@ -337,15 +337,17 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
-  async getTimeEntryById(id: number | string, start: Date): Promise<TimeEntry | null> {
-    const end = new Date(start);
+  async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
+    const end = new Date(start!);
     end.setDate(end.getDate() + 364); // Max time range is 365 days
 
     const queryParams = {
       time_entry_ids: [id],
-      start_date: start.toISOString().slice(0, 10), // format YYYY-MM-DD
+      start_date: start?.toISOString().slice(0, 10), // format YYYY-MM-DD
       end_date: end.toISOString().slice(0, 10), // format YYYY-MM-DD
     };
+
+    const entries: TogglTimeEntry[] = [];
 
     let response;
 
@@ -361,9 +363,8 @@ export class TogglTrackSyncedService implements SyncedService {
       return null;
     }
 
-    //const allTags: ServiceObject[] = await this._getAllTags() as ServiceObject[];
+    const allTags: ServiceObject[] = await this._getAllTags() as ServiceObject[];
 
-    const entries: TogglTimeEntry[] = [];
     response.body.forEach((timeEntryInfo: never) => {
       const timeEntries: never[] = timeEntryInfo['time_entries'];
       if (!timeEntries || timeEntries.length === 0) {
@@ -371,7 +372,15 @@ export class TogglTrackSyncedService implements SyncedService {
       }
       const timeEntry = timeEntries[0];
 
-      const tagIds: number[] = (timeEntryInfo['tag_ids']);
+      const timeEntryIds: number[] = (timeEntryInfo['tag_ids']);
+
+      const tags: string[] = [];
+      timeEntryIds.forEach((tagId: number) => {
+        const foundTag = allTags.find((t) => t.id === tagId);
+        if (foundTag) {
+          tags.push(foundTag.name);
+        }
+      });
 
       const entry = new TogglTimeEntry(
           timeEntry['id'],
@@ -380,7 +389,7 @@ export class TogglTrackSyncedService implements SyncedService {
           new Date(timeEntry['start']),
           new Date(timeEntry['stop']),
           timeEntry['seconds'] * 1000,
-          tagIds,
+          tags,
           new Date(timeEntry['at']),
       );
 
@@ -474,9 +483,9 @@ export class TogglTrackSyncedService implements SyncedService {
           const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._serviceDefinition.name);
           // push to result all other than 'TogglTrack'
           mappingsObjectsResult.push(...otherProjectMappingsObjects);
-        } else if (togglMappingsObject.type !== this._projectsType && timeEntry.tagIds) {
+        } else if (togglMappingsObject.type !== this._projectsType && timeEntry.tags) {
           // find other mappings in timeEntry's tags -> issues, time entry activity
-          if (timeEntry.tagIds.find(tagId => tagId === togglMappingsObject.id)) {
+          if (timeEntry.tags.find(tag => tag === togglMappingsObject.name)) {
             const otherProjectMappingsObjects = mapping.mappingsObjects.filter(mappingsObject => mappingsObject.service !== this._serviceDefinition.name);
             // push to result all other than 'TogglTrack'
             mappingsObjectsResult.push(...otherProjectMappingsObjects);
