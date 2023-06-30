@@ -69,6 +69,10 @@ export class DatabaseService {
   // USERS *****************************************************
   // ***********************************************************
 
+  /**
+   * Get user by user id
+   * @param userId
+   */
   async getUserById(userId: ObjectId): Promise<User | null> {
     if (!this._usersCollection) return null;
 
@@ -80,6 +84,10 @@ export class DatabaseService {
   // CONNECTIONS ***********************************************
   // ***********************************************************
 
+  /**
+   * Get connection by connection id
+   * @param connectionId
+   */
   async getConnectionById(connectionId: ObjectId): Promise<Connection | null> {
     if (!this._connectionsCollection) return null;
 
@@ -87,6 +95,9 @@ export class DatabaseService {
     return this._connectionsCollection.findOne(filterQuery);
   }
 
+  /**
+   * Get connections which are active
+   */
   async getActiveConnections(): Promise<Connection[]> {
     if (!this._connectionsCollection) return [];
 
@@ -94,9 +105,18 @@ export class DatabaseService {
     return this._connectionsCollection.find(filterQuery).toArray();
   }
 
+  /**
+   * Update connection partly - only the connection.mappings
+   * @param connection
+   */
   async updateConnectionMappings(connection: Connection): Promise<boolean> {
     return this._updateConnectionPartly(connection, { $set: { mappings: connection.mappings } });
   }
+
+  /**
+   * Update connection partly - only the connection.configSyncJobDefinition lastJobTime and status
+   * @param connection
+   */
   async updateConnectionConfigSyncJobLastDone(connection: Connection): Promise<boolean> {
     return this._updateConnectionPartly(connection, { $set: {
       "configSyncJobDefinition.lastJobTime": connection.configSyncJobDefinition.lastJobTime,
@@ -104,6 +124,10 @@ export class DatabaseService {
     } });
   }
 
+  /**
+   * Update connection partly - only the connection.timeEntrySyncJobDefinition lastJobTime and status
+   * @param connection
+   */
   async updateConnectionTimeEntrySyncJobLastDone(connection: Connection): Promise<boolean> {
     return this._updateConnectionPartly(connection, { $set: {
         "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
@@ -111,6 +135,12 @@ export class DatabaseService {
       } });
   }
 
+  /**
+   * Update connection partly - depends on the updateQuery
+   * @param connection
+   * @param updateQuery
+   * @private
+   */
   private async _updateConnectionPartly(connection: Connection, updateQuery: Record<string, unknown>): Promise<boolean> {
     if (!this._connectionsCollection) return false;
 
@@ -120,6 +150,9 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
+  /**
+   * Get connections which has to be deleted - deleteTimestamp is older than 2 days
+   */
   async getConnectionsToDelete(): Promise<Connection[]> {
     if (!this._connectionsCollection) return [];
 
@@ -131,6 +164,9 @@ export class DatabaseService {
     return this._connectionsCollection.find(filterQuery).toArray();
   }
 
+  /**
+   * Delete connection which has to be deleted - deleteTimestamp is older than 2 days
+   */
   async cleanUpConnections(): Promise<boolean> {
     if (!this._connectionsCollection) return false;
 
@@ -147,6 +183,10 @@ export class DatabaseService {
   // TIME ENTRY SYNCED OBJECTS *********************************
   // ***********************************************************
 
+  /**
+   * Get time entry synced objects by connection
+   * @param connection
+   */
   async getTimeEntrySyncedObjects(connection: Connection): Promise<TimeEntrySyncedObject[] | null> {
     if (!this._timeEntrySyncedObjectsCollection) return null;
 
@@ -207,6 +247,10 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
+  /**
+   * Delete time entry synced which belongs to the connection
+   * @param connectionId
+   */
   async deleteTimeEntrySyncedObjectByConnection(connectionId: ObjectId) {
     if (!this._timeEntrySyncedObjectsCollection) return false;
 
@@ -231,6 +275,10 @@ export class DatabaseService {
   // JOB LOGS **************************************************
   // ***********************************************************
 
+  /**
+   * Get job logs by ID
+   * @param jobLogId
+   */
   async getJobLogById(jobLogId: string): Promise<JobLog | null> {
     if (!this._jobLogsCollection) return null;
 
