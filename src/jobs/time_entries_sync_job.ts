@@ -21,6 +21,8 @@ export class TimeEntriesSyncJob extends SyncJob {
    * Synces time entries, that are identified with the user's mappings
    */
   protected async _doTheJob(): Promise<boolean> {
+    console.log('Time entries sync job started for connection '.concat(this._connection._id.toHexString()));
+
     let now = new Date();
     const someDaysAgoFilter = new Date(now.setDate(now.getDate() - Constants.daysToSync));
     now = new Date();
@@ -170,6 +172,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     await this.updateConnectionConfigSyncJobLastDone(operationsOk);
 
+    console.log("Time entry sync job for connection " + this._connection._id.toHexString() + " finished.");
     return operationsOk;
   }
 

@@ -24,7 +24,8 @@ export class ConfigSyncJob extends SyncJob {
    * Additionally, checks if anything is missing in the secondary services and it should be there (user could delete it by mistake)
    */
   protected async _doTheJob(): Promise<boolean> {
-    // console.log('[OMR] config_sync_job started for connection '.concat(this._connection._id.toHexString()));
+    console.log('Config sync job started for connection '.concat(this._connection._id.toHexString()));
+
     const primaryServiceDefinition: SyncedServiceDefinition | undefined = Connection.getPrimaryServiceDefinition(this._connection);
 
     if (!primaryServiceDefinition) {
@@ -213,6 +214,7 @@ export class ConfigSyncJob extends SyncJob {
 
     await databaseService.updateJobLog(this._jobLog);
 
+    console.log("Config sync job for connection " + this._connection._id.toHexString() + " finished.");
     return operationsOk;
   }
 
