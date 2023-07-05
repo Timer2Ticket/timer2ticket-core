@@ -1,0 +1,119 @@
+{
+	"info": {
+		"_postman_id": "3fcbdbc3-075b-43e6-9fe0-640baef69cac",
+		"name": "T2T Core",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Core",
+			"item": [
+				{
+					"name": "Immediate time entry sync job",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/api/v2/schedule_time_entries_job/{{scheduleTimeEntriesJobJobLogId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"schedule_time_entries_job",
+								"{{scheduleTimeEntriesJobJobLogId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Immediate config sync job",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/api/v2/schedule_config_job/{{scheduleConfigJobJobLogId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"schedule_config_job",
+								"{{scheduleConfigJobJobLogId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create schedule for created connection",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/v2/create/{{createScheduleConnectionId}}",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"create",
+								"{{createScheduleConnectionId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update schedule for updated connections",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"connectionIds\": {{updateScheduleConnectionIds}}\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/v2/update",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"update"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
