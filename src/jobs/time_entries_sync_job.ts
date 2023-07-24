@@ -194,12 +194,14 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     const otherServicesMappingsObjects = timeEntryOriginServiceWrapper.syncedService.extractMappingsObjectsFromTimeEntry(timeEntry, this._user.mappings);
 
-    if (otherServicesMappingsObjects.length === 0) {
-      // TE sync is not required (e.g. not project selected etc.)
-      return null;
-    }
-
     for (const otherServiceDefinition of otherServiceTimeEntriesWrappers) {
+
+      //moved here because Redmine now accepts issue id in text therefore mappings can be empty for this TE
+      if (otherServicesMappingsObjects.length === 0 && otherServiceDefinition.serviceDefinition.name !== 'Redmine') {
+        // TE sync is not required (e.g. not project selected etc.)
+        return null;
+      }
+
       const createdTimeEntry = await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
         otherServicesMappingsObjects,
         otherServiceDefinition.serviceDefinition,

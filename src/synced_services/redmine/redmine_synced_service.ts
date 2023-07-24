@@ -445,6 +445,7 @@ export class RedmineSyncedService implements SyncedService {
     let projectId;
     let issueId;
     let activityId;
+    let usedTextId = false;
 
     for (const data of additionalData) {
       if (data.type === this._projectsType) {
@@ -453,6 +454,17 @@ export class RedmineSyncedService implements SyncedService {
         issueId = data.id;
       } else if (data.type === this._timeEntryActivitiesType) {
         activityId = data.id;
+      }
+    }
+    console.log("found text and issue id is not defined");
+    if (text && typeof issueId === 'undefined') {
+      console.log("found text and issue id is not defined");
+      // checks if TE comment begins with task id
+      const regex = /^#(?<project_id>\d+) /;
+      const projectId = text.match(regex);
+      if (projectId && projectId.groups) {
+        issueId = projectId.groups.project_id;
+        usedTextId = true;
       }
     }
 
@@ -503,6 +515,18 @@ export class RedmineSyncedService implements SyncedService {
     const createdStart = new Date(response.body.time_entry['spent_on']);
     const createdEnd = new Date(new Date(response.body.time_entry['spent_on']).setMilliseconds(durationInMilliseconds));
     const createdDurationInMilliseconds = response.body.time_entry['hours'] * 60 * 60 * 1000;
+    const date = new Date(response.body.time_entry['updated_on']);
+    let lastUpdated;
+
+    // this is used to force T2T to update other services in next sync to add the issue ID to TE
+    if (usedTextId) {
+      lastUpdated = new Date(date.getTime());
+      lastUpdated.setDate(date.getDate() - 1);
+    } else {
+      lastUpdated = date;
+    }
+
+
 
     return new RedmineTimeEntry(
       response.body.time_entry['id'],
@@ -513,7 +537,7 @@ export class RedmineSyncedService implements SyncedService {
       createdDurationInMilliseconds,
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
-      new Date(response.body.time_entry['updated_on']),
+      lastUpdated,
     );
   }
 
