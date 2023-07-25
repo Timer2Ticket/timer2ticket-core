@@ -30,6 +30,7 @@ export class TogglTrackSyncedService implements SyncedService {
   public errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null;
 
   constructor(serviceDefinition: ServiceDefinition) {
     this._serviceDefinition = serviceDefinition;
@@ -53,6 +54,9 @@ export class TogglTrackSyncedService implements SyncedService {
 
     this._sentryService = new SentryService();
     this._errorService = new ErrorService();
+
+    //not used in this synced service
+    this._user = null;
   }
 
   /**

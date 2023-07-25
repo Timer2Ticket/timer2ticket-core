@@ -415,7 +415,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       ));
     }
 
-    const service = SyncedServiceCreator.create(serviceDefinition);
+    const service = SyncedServiceCreator.create(serviceDefinition, this._user);
     const createdTimeEntry = await service.createTimeEntry(
       timeEntryModel.durationInMilliseconds,
       new Date(timeEntryModel.start),

@@ -32,9 +32,10 @@ export class RedmineSyncedService implements SyncedService {
 
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null;
 
   public errors: Array<Timer2TicketError>;
-  constructor(serviceDefinition: ServiceDefinition) {
+  constructor(serviceDefinition: ServiceDefinition, user: User | null) {
     if (serviceDefinition.config.apiPoint === null) {
       //TODO add sentry error
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
@@ -57,7 +58,11 @@ export class RedmineSyncedService implements SyncedService {
     this._errorService = new ErrorService();
 
     this.errors = [];
+
+    this._user = user;
   }
+
+
 
   /**
    * Can be awaited for @milliseconds
@@ -456,9 +461,8 @@ export class RedmineSyncedService implements SyncedService {
         activityId = data.id;
       }
     }
-    console.log("found text and issue id is not defined");
+
     if (text && typeof issueId === 'undefined') {
-      console.log("found text and issue id is not defined");
       // checks if TE comment begins with task id
       const regex = /^#(?<project_id>\d+) /;
       const projectId = text.match(regex);
@@ -522,6 +526,8 @@ export class RedmineSyncedService implements SyncedService {
     if (usedTextId) {
       lastUpdated = new Date(date.getTime());
       lastUpdated.setDate(date.getDate() - 1);
+      // schedule config job to force update mappings to prepare mappings for sync from redmine
+      superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
     } else {
       lastUpdated = date;
     }

@@ -12,6 +12,7 @@ export interface SyncedService {
   errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null
 
   /**
    * Get all service objects which: projects, issues, activities etc.
