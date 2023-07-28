@@ -464,7 +464,7 @@ export class RedmineSyncedService implements SyncedService {
 
     if (text && typeof issueId === 'undefined') {
       // checks if TE comment begins with task id
-      const regex = /^#(?<project_id>\d+) /;
+      const regex = /^#(?<project_id>\d+)/;
       const projectId = text.match(regex);
       if (projectId && projectId.groups) {
         issueId = projectId.groups.project_id;
@@ -527,7 +527,7 @@ export class RedmineSyncedService implements SyncedService {
       lastUpdated = new Date(date.getTime());
       lastUpdated.setDate(date.getDate() - 1);
       // schedule config job to force update mappings to prepare mappings for sync from redmine
-      superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
+      await superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
     } else {
       lastUpdated = date;
     }
