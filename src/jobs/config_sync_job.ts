@@ -143,6 +143,8 @@ export class ConfigSyncJob extends SyncJob {
       } else if (isObsolete && mapping.markedToDelete === undefined) {
         // set markedToDelete to now only
         mapping.markedToDelete = new Date();
+      } else if (!isObsolete && mapping.markedToDelete) {
+        mapping.markedToDelete = undefined;
       }
     }
 
