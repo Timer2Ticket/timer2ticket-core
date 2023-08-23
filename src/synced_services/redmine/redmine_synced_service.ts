@@ -14,6 +14,7 @@ import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import * as Sentry from '@sentry/node';
+import {forEach} from "typescript-collections/dist/lib/arrays";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -72,8 +73,8 @@ export class RedmineSyncedService implements SyncedService {
    * Method to wrap superagent request in case of wanting to retry request.
    * Plus waiting if responded with 429 Too many requests.
    * (Seems like Redmine does not respond with 429, but handled just in case.)
-   * @param request 
-   * @returns 
+   * @param request
+   * @returns
    */
   private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest, body?: unknown): Promise<superagent.Response> {
     let needToWait = false;
@@ -188,6 +189,21 @@ export class RedmineSyncedService implements SyncedService {
     return projects;
   }
 
+  private async _getProjectIds() {
+    const projects = await this._getAllProjects();
+    const projectIds: (string | number)[] = [];
+
+    if (Array.isArray(projects)) {
+
+      forEach(projects, function (project) {
+        projectIds.push(project.id)
+      })
+    } else {
+      return [];
+    }
+    return projectIds;
+  }
+
   // ***********************************************************
   // OTHER SERVICE OBJECTS *************************************
   // ***********************************************************
@@ -202,6 +218,8 @@ export class RedmineSyncedService implements SyncedService {
       limit: this._responseLimit,
       offset: 0,
     };
+
+    const projectIds = await this._getProjectIds();
 
     const issues: ServiceObject[] = [];
 
@@ -222,14 +240,16 @@ export class RedmineSyncedService implements SyncedService {
         return false;
       }
 
-
       responseIssues.body?.issues.forEach((issue: never) => {
-        issues.push(
-          new ServiceObject(
-            issue['id'],
-            issue['subject'],
-            this._issuesType,
-          ));
+        console.log(issue['project']['id']);
+        if (projectIds.indexOf(issue['project']['id']) > -1) {
+          issues.push(
+              new ServiceObject(
+                  issue['id'],
+                  issue['subject'],
+                  this._issuesType,
+              ));
+        }
       });
 
       queryParams.offset += queryParams.limit;
@@ -539,8 +559,8 @@ export class RedmineSyncedService implements SyncedService {
 
   /**
    * Extracts project, issue and time entry activity and returns them as mappingObjects
-   * @param timeEntry 
-   * @param mappings 
+   * @param timeEntry
+   * @param mappings
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
     // this should not happen
