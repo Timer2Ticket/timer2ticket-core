@@ -13,8 +13,6 @@ import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
-import * as Sentry from '@sentry/node';
-import {forEach} from "typescript-collections/dist/lib/arrays";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -191,17 +189,7 @@ export class RedmineSyncedService implements SyncedService {
 
   private async _getProjectIds() {
     const projects = await this._getAllProjects();
-    const projectIds: (string | number)[] = [];
-
-    if (Array.isArray(projects)) {
-
-      forEach(projects, function (project) {
-        projectIds.push(project.id)
-      })
-    } else {
-      return [];
-    }
-    return projectIds;
+    return typeof projects !== "boolean" ? projects.reduce((project: any) => project.id, []) : [];
   }
 
   // ***********************************************************
@@ -241,7 +229,6 @@ export class RedmineSyncedService implements SyncedService {
       }
 
       responseIssues.body?.issues.forEach((issue: never) => {
-        console.log(issue['project']['id']);
         if (projectIds.indexOf(issue['project']['id']) > -1) {
           issues.push(
               new ServiceObject(
