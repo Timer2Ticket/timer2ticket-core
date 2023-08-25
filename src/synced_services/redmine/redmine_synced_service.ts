@@ -189,7 +189,7 @@ export class RedmineSyncedService implements SyncedService {
 
   private async _getProjectIds() {
     const projects = await this._getAllProjects();
-    return typeof projects !== "boolean" ? projects.reduce((project: any) => project.id, []) : [];
+    return typeof projects !== "boolean" ? projects.map(project => project.id) : [];
   }
 
   // ***********************************************************
