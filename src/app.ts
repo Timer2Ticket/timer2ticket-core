@@ -193,7 +193,7 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
     }
 
     if (unsuccesfulConnectionIds.length > 0) {
-        return res.status(500).send(`Failed to update connections: ${unsuccesfulConnectionIds.join(', ')}`);
+        return res.status(400).send(`Failed to update connections: ${unsuccesfulConnectionIds.join(', ')}`);
 
     } else {
         return res.send('Connections updated successfully.');
