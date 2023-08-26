@@ -1,8 +1,9 @@
 {
 	"info": {
-		"_postman_id": "3fcbdbc3-075b-43e6-9fe0-640baef69cac",
+		"_postman_id": "0e7c8571-165c-4ef4-a922-2c3adeb38bc2",
 		"name": "T2T Core",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29126151"
 	},
 	"item": [
 		{
@@ -10,6 +11,33 @@
 			"item": [
 				{
 					"name": "Immediate time entry sync job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - job log must exists\r",
+									"\r",
+									"pm.test(\"Response status code is 200 OK\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"\r",
+									"    const responseBody = pm.response.text();\r",
+									"\r",
+									"    var expectedMessages = [\r",
+									"    \"User's time entries sync job scheduled successfully.\"\r",
+									"    ];\r",
+									"\r",
+									"    expectedMessages.forEach(function(message) {\r",
+									"        pm.expect(responseBody).to.include(message);\r",
+									"    });\r",
+									"\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -31,7 +59,72 @@
 					"response": []
 				},
 				{
+					"name": "Immediate time entry sync job - error - job log not exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - job log must not exists\r",
+									"\r",
+									"pm.test(\"Response status code is 404 Not Found\", function () {\r",
+									"    pm.response.to.have.status(404);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/api/v2/schedule_time_entries_job/123456789012345678901234",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"schedule_time_entries_job",
+								"123456789012345678901234"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "Immediate config sync job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - job log must exists\r",
+									"\r",
+									"pm.test(\"Response status code is 200 OK\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"\r",
+									"    const responseBody = pm.response.text();\r",
+									"\r",
+									"    var expectedMessages = [\r",
+									"    \"User's config sync job scheduled successfully.\"\r",
+									"    ];\r",
+									"\r",
+									"    expectedMessages.forEach(function(message) {\r",
+									"        pm.expect(responseBody).to.include(message);\r",
+									"    });\r",
+									"\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -53,7 +146,61 @@
 					"response": []
 				},
 				{
+					"name": "Immediate config sync job - error - job log not exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - job log must not exists\r",
+									"\r",
+									"pm.test(\"Response status code is 404 Not Found\", function () {\r",
+									"    pm.response.to.have.status(404);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/api/v2/schedule_config_job/123456789012345678901234",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"schedule_config_job",
+								"123456789012345678901234"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "Create schedule for created connection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - connection must exists\r",
+									"\r",
+									"pm.test(\"Response status code is 201 Created\", function () {\r",
+									"    pm.response.to.have.status(201);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -84,13 +231,133 @@
 					"response": []
 				},
 				{
+					"name": "Create schedule for created connection - error - connection not exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - connection must exists\r",
+									"\r",
+									"pm.test(\"Response status code is 404 Not Found\", function () {\r",
+									"    pm.response.to.have.status(404);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/v2/create/123456789012345678901234",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"create",
+								"123456789012345678901234"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "Update schedule for updated connections",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - connections must exist\r",
+									"\r",
+									"pm.test(\"Response status code is 200 OK\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [],
 						"body": {
 							"mode": "raw",
 							"raw": "{\r\n    \"connectionIds\": {{updateScheduleConnectionIds}}\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:3000/api/v2/update",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"api",
+								"v2",
+								"update"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update schedule for updated connections - error - connection not exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Prerequisites:\r",
+									"// - connections must not exist\r",
+									"\r",
+									"pm.test(\"Response status code is 400 Bad Request\", function () {\r",
+									"    pm.response.to.have.status(400);\r",
+									"\r",
+									"    const responseBody = pm.response.text();\r",
+									"\r",
+									"    var expectedMessages = [\r",
+									"    \"Failed to update connections: \"\r",
+									"    ];\r",
+									"\r",
+									"    expectedMessages.forEach(function(message) {\r",
+									"        pm.expect(responseBody).to.include(message);\r",
+									"    });\r",
+									"\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"connectionIds\": [\"123456789012345678901234\"]\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"

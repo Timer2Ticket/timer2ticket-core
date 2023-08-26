@@ -1,33 +1,33 @@
 {
-	"id": "146e52f0-fd32-4814-8e58-8a3c0f4d5eb7",
+	"id": "50dca3e7-243c-46d6-8a1a-cc8f59a94023",
 	"values": [
 		{
 			"key": "scheduleConfigJobJobLogId",
-			"value": "",
+			"value": "64b1427d52453f01d4b2d1b8",
 			"type": "default",
 			"enabled": true
 		},
 		{
 			"key": "scheduleTimeEntriesJobJobLogId",
-			"value": "",
+			"value": "64b1429152453f01d4b2d1ba",
 			"type": "default",
 			"enabled": true
 		},
 		{
 			"key": "createScheduleConnectionId",
-			"value": "",
+			"value": "64a96f038769971e7d6cab13",
 			"type": "default",
 			"enabled": true
 		},
 		{
 			"key": "updateScheduleConnectionIds",
-			"value": "",
+			"value": "[\"64a96f038769971e7d6cab13\"]",
 			"type": "default",
 			"enabled": true
 		}
 	],
-	"name": "T2T Core env",
+	"name": "Globals",
 	"_postman_variable_scope": "globals",
-	"_postman_exported_at": "2023-07-05T14:59:28.753Z",
-	"_postman_exported_using": "Postman/10.15.0"
+	"_postman_exported_at": "2023-08-26T10:25:12.064Z",
+	"_postman_exported_using": "Postman/10.17.1"
 }
