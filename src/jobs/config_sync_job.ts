@@ -14,13 +14,14 @@ import * as Sentry from '@sentry/node';
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
 import {ExtraContext} from "../models/extra_context";
+import {TogglTrackSyncedService} from "../synced_services/toggl/toggl_synced_service";
 
 export class ConfigSyncJob extends SyncJob {
   /**
    * This job takes mappings from the user and checks if there are any problems with them
    * If there are no mappings, job is called probably for the first time for this user
    * Should create all mappings and sync all projects, issues etc. from primary service to the other ones
-   * 
+   *
    * If mappings are there, should check if all are correct and updated
    * E.g. looks for project definition in one service and checks if mapping is synced in PRIMARY (for example name could change, or project has been deleted)
    * If not, updates mappings and propagates change through other services
@@ -191,6 +192,7 @@ export class ConfigSyncJob extends SyncJob {
                   operationsOk = false;
                 } else {
                   // console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
+                  foundTESO.issueId = mapping.primaryObjectId;
                   timeEntriesToArchive.push(foundTESO);
                 }
               }
@@ -201,9 +203,18 @@ export class ConfigSyncJob extends SyncJob {
         // scenario c)
         operationsOk &&= await this._deleteMapping(mapping);
       }
-
+      const togglService = secondaryServicesWrappersMap.get(TogglTrackSyncedService.name);
       // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
+
+        if (togglService !== undefined) {
+          let toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
+              (element) => element.service === TogglTrackSyncedService.name);
+          if (toggleTimeEntry !== undefined && timeEntryToArchive.issueId !== undefined) {
+            await togglService.syncedService.updateTimeEntry(toggleTimeEntry, timeEntryToArchive.issueId)
+          }
+
+        }
         const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
         operationsOk &&= updateResponse !== null;
       }

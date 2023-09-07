@@ -13,6 +13,7 @@ import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
+import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -134,6 +135,10 @@ export class RedmineSyncedService implements SyncedService {
     // Redmine cannot be secondary for now. So this method is not used.
     // TODO change to Not implemented error.
     throw new Error("Redmine is meant to be primary.");
+  }
+
+  async updateTimeEntry(toggleTimeEntry: ServiceTimeEntryObject, tagId: number | string): Promise<void> {
+    throw new Error("Method not implemented");
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {

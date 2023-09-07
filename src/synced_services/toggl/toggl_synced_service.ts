@@ -11,6 +11,7 @@ import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
+import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -67,8 +68,8 @@ export class TogglTrackSyncedService implements SyncedService {
   /**
    * Method to wrap superagent request in case of wanting to retry request.
    * Plus waiting if responded with 429 Too many requests.
-   * @param request 
-   * @returns 
+   * @param request
+   * @returns
    */
   private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest): Promise<superagent.Response> {
     let needToWait = false;
@@ -337,6 +338,30 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
+  async updateTimeEntry(timeEntry: ServiceTimeEntryObject, tagId: number | string) {
+    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id);
+
+    if (timeEntryFromApi === null) {
+       return;
+    }
+
+    let body = {
+      'array' : [
+        {'op': 'add',
+          'path': '/description',
+          'value': `#${tagId}` + timeEntryFromApi != null ? timeEntryFromApi?.text : ''
+        }
+      ]
+    };
+
+    let response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+            .patch(`${this._workspacesTimeEntriesUri}/${timeEntry?.id}`)
+            .auth(this._serviceDefinition.apiKey, 'api_token')
+            .send(body)
+    );
+  }
+
   async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
     const end = new Date(start!);
     end.setDate(end.getDate() + 364); // Max time range is 365 days
@@ -465,8 +490,8 @@ export class TogglTrackSyncedService implements SyncedService {
 
   /**
    * Extracts project from timeEntry.project + issue and time entry activity etc from the tags
-   * @param timeEntry 
-   * @param mappings 
+   * @param timeEntry
+   * @param mappings
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
     // this should not happen
