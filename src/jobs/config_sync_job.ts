@@ -192,7 +192,7 @@ export class ConfigSyncJob extends SyncJob {
                   operationsOk = false;
                 } else {
                   // console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
-                  foundTESO.issueId = mapping.primaryObjectId;
+                  foundTESO.issueName = mapping.mappingsObjects.find(element => element.service === "TogglTrack")?.name;
                   timeEntriesToArchive.push(foundTESO);
                 }
               }
@@ -203,15 +203,16 @@ export class ConfigSyncJob extends SyncJob {
         // scenario c)
         operationsOk &&= await this._deleteMapping(mapping);
       }
-      const togglService = secondaryServicesWrappersMap.get(TogglTrackSyncedService.name);
+      //TODO figure out how to pass TogglTrack in better
+      const togglService = secondaryServicesWrappersMap.get("TogglTrack");
       // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
 
         if (togglService !== undefined) {
           let toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
-              (element) => element.service === TogglTrackSyncedService.name);
-          if (toggleTimeEntry !== undefined && timeEntryToArchive.issueId !== undefined) {
-            await togglService.syncedService.updateTimeEntry(toggleTimeEntry, timeEntryToArchive.issueId)
+              (element) => element.service === "TogglTrack");
+          if (toggleTimeEntry !== undefined && timeEntryToArchive.issueName !== undefined) {
+            await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
           }
 
         }

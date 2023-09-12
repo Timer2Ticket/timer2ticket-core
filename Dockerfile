@@ -17,4 +17,4 @@ WORKDIR /app
 
 RUN npm install --production
 
-CMD [ "node", "./dist/app.js" ]
+CMD [ "node", "--inspect 0.0.0.0", "./dist/app.js" ]

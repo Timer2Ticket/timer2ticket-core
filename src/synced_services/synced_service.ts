@@ -6,7 +6,6 @@ import {User} from "../models/user";
 import {Timer2TicketError} from "../models/timer2TicketError";
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
-import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {ServiceTimeEntryObject} from "../models/synced_service/time_entry_synced_object/service_time_entry_object";
 
 export interface SyncedService {
@@ -68,7 +67,7 @@ export interface SyncedService {
    */
   createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null>;
 
-  updateTimeEntry(toggleTimeEntry: ServiceTimeEntryObject, tagId: number | string): Promise<void>
+  replaceTimeEntryDescription(toggleTimeEntry: ServiceTimeEntryObject, tagName: number | string): Promise<void>
 
   /**
    * Delete time entry with given id, returns true if successfully deleted

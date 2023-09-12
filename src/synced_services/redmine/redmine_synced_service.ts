@@ -137,7 +137,7 @@ export class RedmineSyncedService implements SyncedService {
     throw new Error("Redmine is meant to be primary.");
   }
 
-  async updateTimeEntry(toggleTimeEntry: ServiceTimeEntryObject, tagId: number | string): Promise<void> {
+  async replaceTimeEntryDescription(toggleTimeEntry: ServiceTimeEntryObject, tagId: number | string): Promise<void> {
     throw new Error("Method not implemented");
   }
 

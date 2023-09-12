@@ -338,21 +338,23 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
-  async updateTimeEntry(timeEntry: ServiceTimeEntryObject, tagId: number | string) {
-    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id);
+  async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
+    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, new Date(new Date().setDate(new Date().getDate() - 180)));
 
     if (timeEntryFromApi === null) {
        return;
     }
 
-    let body = {
-      'array' : [
-        {'op': 'add',
+
+
+    let body =
+      [
+        {'op': 'replace',
           'path': '/description',
-          'value': `#${tagId}` + timeEntryFromApi != null ? timeEntryFromApi?.text : ''
+          'value': timeEntryFromApi != null ? timeEntryFromApi?.text + ` ${tagName}` : `${tagName}`
         }
       ]
-    };
+    ;
 
     let response = await this._retryAndWaitInCaseOfTooManyRequests(
         superagent
