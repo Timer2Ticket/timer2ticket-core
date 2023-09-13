@@ -339,13 +339,13 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
-    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, new Date(new Date().setDate(new Date().getDate() - 180)));
+    let start = new Date();
+    start.setMonth(start.getMonth() - 6);
+    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
 
     if (timeEntryFromApi === null) {
        return;
     }
-
-
 
     let body =
       [

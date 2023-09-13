@@ -212,7 +212,12 @@ export class ConfigSyncJob extends SyncJob {
           let toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
               (element) => element.service === "TogglTrack");
           if (toggleTimeEntry !== undefined && timeEntryToArchive.issueName !== undefined) {
-            await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
+            try {
+              await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
+            }
+              catch (exception) {
+                operationsOk = false;
+              }
           }
 
         }
