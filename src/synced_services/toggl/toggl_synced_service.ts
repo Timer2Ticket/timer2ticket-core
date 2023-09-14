@@ -32,6 +32,9 @@ export class TogglTrackSyncedService implements SyncedService {
   readonly _errorService: ErrorService
   readonly _user: User | null;
 
+  readonly supportsBackwardTagAssignmentAsSource = true;
+  readonly supportsBackwardTagAssignmentAsTarget = false;
+
   constructor(serviceDefinition: ServiceDefinition) {
     this._serviceDefinition = serviceDefinition;
 
@@ -71,8 +74,8 @@ export class TogglTrackSyncedService implements SyncedService {
   /**
    * Method to wrap superagent request in case of wanting to retry request.
    * Plus waiting if responded with 429 Too many requests.
-   * @param request 
-   * @returns 
+   * @param request
+   * @returns
    */
   private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest): Promise<superagent.Response> {
     let needToWait = false;
@@ -469,8 +472,8 @@ export class TogglTrackSyncedService implements SyncedService {
 
   /**
    * Extracts project from timeEntry.project + issue and time entry activity etc from the tags
-   * @param timeEntry 
-   * @param mappings 
+   * @param timeEntry
+   * @param mappings
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
     // this should not happen

@@ -34,6 +34,9 @@ export class RedmineSyncedService implements SyncedService {
   readonly _errorService: ErrorService
   readonly _user: User | null;
 
+  readonly supportsBackwardTagAssignmentAsSource = false;
+  readonly supportsBackwardTagAssignmentAsTarget = true;
+
   public errors: Array<Timer2TicketError>;
   constructor(serviceDefinition: ServiceDefinition, user: User | null) {
     if (serviceDefinition.config.apiPoint === null) {
@@ -77,8 +80,8 @@ export class RedmineSyncedService implements SyncedService {
    * Method to wrap superagent request in case of wanting to retry request.
    * Plus waiting if responded with 429 Too many requests.
    * (Seems like Redmine does not respond with 429, but handled just in case.)
-   * @param request 
-   * @returns 
+   * @param request
+   * @returns
    */
   private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest, body?: unknown): Promise<superagent.Response> {
     let needToWait = false;
@@ -569,8 +572,8 @@ export class RedmineSyncedService implements SyncedService {
 
   /**
    * Extracts project, issue and time entry activity and returns them as mappingObjects
-   * @param timeEntry 
-   * @param mappings 
+   * @param timeEntry
+   * @param mappings
    */
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
     // this should not happen
