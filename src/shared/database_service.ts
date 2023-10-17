@@ -6,7 +6,8 @@ import { JobLog } from '../models/job_log';
 import {Connection} from "../models/connection/connection";
 
 export class DatabaseService {
-  private static _mongoDbName = 'timer2ticketDB_new';
+
+  private static _mongoDbName = Constants.mongoDbName;
   private static _usersCollectionName = 'users';
   private static _connectionsCollectionName = 'connections';
   private static _timeEntrySyncedObjectsCollectionName = 'timeEntrySyncedObjects';
