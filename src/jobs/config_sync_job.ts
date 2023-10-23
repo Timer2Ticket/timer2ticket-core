@@ -10,10 +10,6 @@ import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
-import * as Sentry from '@sentry/node';
-import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/error_service";
-import {ExtraContext} from "../models/extra_context";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -109,7 +105,8 @@ export class ConfigSyncJob extends SyncJob {
           mapping = await this._createMapping(objectToSync, secondaryServicesWrappersMap);
         } else {
           // scenario b), d), e), f)
-          operationsOk &&= await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          let result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          operationsOk &&= result;
         }
 
         // push to checkedMappings
