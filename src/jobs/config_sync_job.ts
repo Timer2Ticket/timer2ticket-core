@@ -105,7 +105,7 @@ export class ConfigSyncJob extends SyncJob {
           mapping = await this._createMapping(objectToSync, secondaryServicesWrappersMap);
         } else {
           // scenario b), d), e), f)
-          let result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          const result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
           operationsOk &&= result;
         }
 
@@ -155,7 +155,8 @@ export class ConfigSyncJob extends SyncJob {
           // add user error
           // console.log(message);
           // // Sentry.captureMessage(message);
-          operationsOk &&= await this._deleteMapping(mapping);
+          const result = await this._deleteMapping(mapping);
+          operationsOk = operationsOk && result;
           continue;
         }
         //there is no explicit link between TESO and Mappings in the T2T DB
