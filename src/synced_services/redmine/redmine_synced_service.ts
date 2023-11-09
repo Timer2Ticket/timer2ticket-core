@@ -8,11 +8,11 @@ import { Utilities } from "../../shared/utilities";
 import { MappingsObject } from "../../models/connection/mapping/mappings_object";
 import { Mapping } from "../../models/connection/mapping/mapping";
 import { Constants } from "../../shared/constants";
-import {Timer2TicketError} from "../../models/timer2TicketError";
-import {SentryService} from "../../shared/sentry_service";
-import {ErrorService} from "../../shared/error_service";
-import {SyncedServiceDefinition} from "../../models/connection/config/synced_service_definition";
-import {Connection} from "../../models/connection/connection";
+import { Timer2TicketError } from "../../models/timer2TicketError";
+import { SentryService } from "../../shared/sentry_service";
+import { ErrorService } from "../../shared/error_service";
+import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
+import { Connection } from "../../models/connection/connection";
 
 export class RedmineSyncedService implements SyncedService {
   private _syncedServiceDefinition: SyncedServiceDefinition;
@@ -85,18 +85,18 @@ export class RedmineSyncedService implements SyncedService {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
         } else if (res.status === 422) {
-            const error = this._errorService.createRedmineError(res.body.errors);
-          const context =  [
-            this._sentryService.createExtraContext("Status_code", {'status_code': res.status})
+          const error = this._errorService.createRedmineError(res.body.errors);
+          const context = [
+            this._sentryService.createExtraContext("Status_code", { 'status_code': res.status })
           ]
-            if (body) {
-              // don't know how to create context from body otherwise. This is a band-aid solution.
-              context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
-              error.data = body;
-            }
-            this.errors.push(error);
-            this._sentryService.logRedmineError(this._projectsUri, res.body.errors, context)
+          if (body) {
+            // don't know how to create context from body otherwise. This is a band-aid solution.
+            context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
+            error.data = body;
           }
+          this.errors.push(error);
+          this._sentryService.logRedmineError(this._projectsUri, res.body.errors, context)
+        }
       });
 
 
@@ -158,12 +158,12 @@ export class RedmineSyncedService implements SyncedService {
       let response;
       try {
         response = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._projectsUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
+          superagent
+            .get(this._projectsUri)
+            .query(queryParams)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (ex: any) {
         this.handleResponseException(ex, 'getAllProjects');
@@ -209,12 +209,12 @@ export class RedmineSyncedService implements SyncedService {
       let responseIssues;
       try {
         responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._issuesUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
+          superagent
+            .get(this._issuesUri)
+            .query(queryParams)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (ex: any) {
         this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
@@ -241,11 +241,11 @@ export class RedmineSyncedService implements SyncedService {
     try {
       // time entry activities (do not paginate)
       responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._timeEntryActivitiesUri)
-              .accept('application/json')
-              .type('application/json')
-              .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
+        superagent
+          .get(this._timeEntryActivitiesUri)
+          .accept('application/json')
+          .type('application/json')
+          .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
@@ -391,12 +391,12 @@ export class RedmineSyncedService implements SyncedService {
       try {
         //console.log('[OMR] -> posielam request! s queryParams.offset='.concat(queryParams.offset.toString()));
         response = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._timeEntriesUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
+          superagent
+            .get(this._timeEntriesUri)
+            .query(queryParams)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._syncedServiceDefinition.config.apiKey)
         );
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
@@ -417,17 +417,17 @@ export class RedmineSyncedService implements SyncedService {
         const end = new Date(new Date(timeEntry['spent_on']).setMilliseconds(durationInMilliseconds));
 
         entries.push(
-            new RedmineTimeEntry(
-                timeEntry['id'],
-                timeEntry['project']['id'],
-                timeEntry['comments'],
-                start,
-                end,
-                durationInMilliseconds,
-                timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
-                timeEntry['activity']['id'],
-                new Date(timeEntry['updated_on']),
-            ),
+          new RedmineTimeEntry(
+            timeEntry['id'],
+            timeEntry['project']['id'],
+            timeEntry['comments'],
+            start,
+            end,
+            durationInMilliseconds,
+            timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
+            timeEntry['activity']['id'],
+            new Date(timeEntry['updated_on']),
+          ),
         );
       });
 
@@ -568,16 +568,16 @@ export class RedmineSyncedService implements SyncedService {
 
 
 
-    if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
+    if (ex !== undefined && (ex.status === 403 || ex.status === 401)) {
       const error = this._errorService.createRedmineError(ex);
-      const context =  [
+      const context = [
         this._sentryService.createExtraContext("Exception", ex),
         this._sentryService.createExtraContext("Status_code", ex.status)
       ]
 
       const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
-      this._sentryService.logRedmineError(this._projectsUri, message , context)
-      error.data ="API key error. Please check if your API key is correct";
+      this._sentryService.logRedmineError(this._projectsUri, message, context)
+      error.data = "API key error. Please check if your API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
       this.errors.push(error)

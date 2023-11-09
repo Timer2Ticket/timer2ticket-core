@@ -13,4 +13,8 @@ export class ServiceConfig {
   apiPoint!: string | null;
   // For Toggl track
   workspace!: Workspace | null;
+  // For Jira
+  userEmail!: string | null;
+  // For Jira
+  domain!: string | null
 }
