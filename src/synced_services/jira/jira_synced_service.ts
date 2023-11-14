@@ -20,8 +20,10 @@ export class jiraSyncedService implements SyncedService {
 
     private _issueUri: string
     private _projectUri: string
+    private _searchUri: string
     private _projectsType: string
     private _issuesType: string
+    private _maxResultsPerSearch: number
 
 
     errors: Array<Timer2TicketError>;
@@ -35,8 +37,10 @@ export class jiraSyncedService implements SyncedService {
 
         this._issueUri = `${this._domain}api/3/issue`
         this._projectUri = `${this._domain}api/3/project`
+        this._searchUri = `${this._domain}/api/3/search`
         this._projectsType = 'project'
         this._issuesType = 'issue'
+        this._maxResultsPerSearch = 50
 
         this.errors = []
         this._sentryService = new SentryService()
@@ -88,6 +92,38 @@ export class jiraSyncedService implements SyncedService {
     private async _getIssues(projects: ServiceObject[]): Promise<ServiceObject[]> {
         //TODO get all issues per project - not easy think about it more
         return []
+    }
+    private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
+        const issues: ServiceObject[] = []
+        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
+
+        let total = 1
+        let received = 0
+        while (total > received) {
+            const query = this._generateTimeEntriesQuery(projectIdOrKey, received, start, end)
+            let response
+            try {
+                response = await superagent
+                    .get(`${this._searchUri}?${query}`)
+                    .set('Authorization', `Basic ${secret}`)
+                    .accept('application/json')
+            } catch (ex: any) {
+                return []
+            }
+            total = response.body.total
+            const responseIssues = response.body.issues
+            responseIssues.forEach((issue: any) => {
+                received++
+                issues.push(new ServiceObject(issue.id, issue.fields.summary, this._issuesType))
+            })
+        }
+        return issues
+    }
+
+    private _generateTimeEntriesQuery(projectIdOrKey: string | number, startAt: number, start?: Date, end?: Date): string {
+        let query = `jql=project=${projectIdOrKey}&startAt=${startAt}`
+
+        return query
     }
 
     /**
@@ -142,10 +178,40 @@ export class jiraSyncedService implements SyncedService {
     /**
      * getTimeEntries
      */
-    getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[]> {
-        return new Promise((resolve, reject) => {
-            reject([])
-        })
+    async getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[]> {
+        const timeEntries: JiraTimeEntry[] = []
+        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
+        const projectId = 'T2T' //TODO for each
+
+        const projects = await this._getAllProjects()
+        for (const project of projects) {
+            const issues = await this._getIssuesOfProject(project.id, start, end)
+            for (const issue of issues) {
+                try {
+                    const response = await superagent
+                        .get(`${this._issueUri}/${issue.id}/worklog`)
+                        .set('Authorization', `Basic ${secret}`)
+                        .accept('application/json')
+                    if (response.body.fields.worklog) {
+                        const worklogs = response.body.worklogs
+                        worklogs.forEach((worklog: any) => {
+                            timeEntries.push(new JiraTimeEntry(worklog.id,
+                                projectId,
+                                worklog.comment.content[0].content[0].text,
+                                worklog.started,
+                                worklog.started, //TODO calculate from start
+                                worklog.timeSpentInSeconds * 1000,
+                                worklog.updated,
+                                issue.id
+                            ))
+                        })
+                    }
+                } catch (ex: any) {
+                    return timeEntries
+                }
+            }
+        }
+        return timeEntries
     }
 
     /**
