@@ -202,7 +202,7 @@ export class jiraSyncedService implements SyncedService {
                                 worklog.started, //TODO calculate from start
                                 worklog.timeSpentInSeconds * 1000,
                                 worklog.updated,
-                                issue.id
+                                worklog.issueId
                             ))
                         })
                     }
@@ -231,10 +231,49 @@ export class jiraSyncedService implements SyncedService {
      * @param text 
      * @param additionalData 
      */
-    createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
-        return new Promise((resolve, reject) => {
-            reject(null)
-        })
+    async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
+        const projectId = 'T2T' //TODO, get from additional data
+        const issueId = 25 // TODO get from additional data
+        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
+        const data = {
+            "comment": {
+                "content": [
+                    {
+                        "content": [
+                            {
+                                "text": text,
+                                "type": "text"
+                            }
+                        ],
+                        "type": "paragraph"
+                    }
+                ],
+                "type": "doc",
+                "version": 1
+            },
+            "started": start,
+            "timeSpentSeconds": durationInMilliseconds * 1000
+        }
+        let response
+        try {
+            response = await superagent
+                .post(`${this._issueUri}/${issueId}/worklog`)
+                .set('Authorization', `Basic ${secret}`)
+                .accept('application/json')
+                .send(data)
+        } catch (ex: any) {
+            return null
+        }
+
+        const newTimeEntry = new JiraTimeEntry(response.body.id,
+            projectId,
+            response.body.comment.content[0].content[0].text,
+            response.body.started,
+            response.body.started, //TODO calculate from start
+            response.body.timeSpentInSeconds * 1000,
+            response.body.updated,
+            response.body.issueId)
+        return newTimeEntry
     }
 
     /**
