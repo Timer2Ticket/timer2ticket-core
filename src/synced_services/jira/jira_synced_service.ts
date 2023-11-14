@@ -9,6 +9,7 @@ import { Timer2TicketError } from "../../models/timer2TicketError";
 import { ErrorService } from "../../shared/error_service";
 import { SentryService } from "../../shared/sentry_service";
 import { SyncedService } from "../synced_service";
+import superagent, { SuperAgentRequest } from "superagent";
 
 export class jiraSyncedService implements SyncedService {
 
@@ -19,6 +20,9 @@ export class jiraSyncedService implements SyncedService {
 
     private _issueUri: string
     private _projectUri: string
+    private _projectsType: string
+    private _issuesType: string
+
 
     errors: Array<Timer2TicketError>;
     readonly _sentryService: SentryService
@@ -31,6 +35,8 @@ export class jiraSyncedService implements SyncedService {
 
         this._issueUri = `${this._domain}api/3/issue`
         this._projectUri = `${this._domain}api/3/project`
+        this._projectsType = 'project'
+        this._issuesType = 'issue'
 
         this.errors = []
         this._sentryService = new SentryService()
@@ -41,10 +47,47 @@ export class jiraSyncedService implements SyncedService {
    * Get all service objects which: projects, issues, activities etc.
    * returns false in case of any error
    */
-    getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+    async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+        const projects = await this._getAllProjects()
+        if (projects.length === 0) {
+            return false
+        }
+        const issues = await this._getIssues(projects)
+
+
+
         return new Promise((resolve, reject) => {
             reject(false)
         })
+    }
+
+    private async _getAllProjects(): Promise<ServiceObject[]> {
+        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
+        let response
+        try {
+            response = await superagent
+                .get(this._projectUri)
+                .set('Authorization', `Basic ${secret}`)
+                .accept('application/json')
+                .type('application/json')
+        } catch (ex: any) {
+            //TODO
+            return []
+        }
+        const projects: ServiceObject[] = []
+        response.body?.forEach((project: any) => {
+            projects.push(
+                new ServiceObject(project.id, project.name, project._projectsType)
+            )
+        })
+        console.log('Projects are:')
+        console.log(projects)
+        return projects
+    }
+
+    private async _getIssues(projects: ServiceObject[]): Promise<ServiceObject[]> {
+        //TODO get all issues per project - not easy think about it more
+        return []
     }
 
     /**
@@ -55,9 +98,21 @@ export class jiraSyncedService implements SyncedService {
      * @param objectName name of serviceObject
      * @param objectType type of serviceObject, ('tag', ...)
      */
-    createServiceObject(objectId: string | number, objectName: string, objectType: string): Promise<ServiceObject> {
+    async createServiceObject(objectId: string | number, objectName: string, objectType: string): Promise<ServiceObject> {
+        switch (objectType) {
+            case this._issuesType:
+                throw new Error('Creating issues in Jira is not supported yet')
+            //return await this._createIssueObject(objectId, objectName, objectType, projectId)
+            // case this._projectsType:
+            //     throw new Error('Creating projects in Jira is not allowed')
+            default:
+                throw new Error(`Unsupported type of ${objectType} in Jira`)
+        }
+    }
+
+    private async _createIssueObject(objectId: string | number, objectName: string, objectType: string, projectId: string | number): Promise<ServiceObject> {
         return new Promise((resolve, reject) => {
-            reject(new ServiceObject(1, 'Jira', 'Project'))
+            reject(new ServiceObject(objectId, objectName, objectType))
         })
     }
 
