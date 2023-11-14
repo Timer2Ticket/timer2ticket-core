@@ -281,8 +281,21 @@ export class jiraSyncedService implements SyncedService {
      * @param id of the time entry to delete from the service
      */
     async deleteTimeEntry(id: string | number): Promise<boolean> {
-        //TODO issue ID needed to remove time entry
-        return false
+        const issueId = this._IssueIdFromTimeEntryId(id)
+        const worklogId = this._WorklogIdFromTimeEntryId(id)
+        if (issueId === -1 || worklogId === -1)
+            return false
+        let response
+        try {
+            response = await superagent
+                .delete(`${this._issueUri}/${issueId}/worklog/${worklogId}`)
+        } catch {
+            return false
+        }
+        if (response.status !== 204)
+            return false
+
+        return true
     }
 
     /**
@@ -304,11 +317,16 @@ export class jiraSyncedService implements SyncedService {
         return `${issueId}_${worklogId}`
     }
 
-    private _IssueIdFromTimeEntryId(timeEntryId: string): number {
-        return Number(timeEntryId.split('_')[0])
+    private _IssueIdFromTimeEntryId(timeEntryId: string | number): number {
+        if (typeof timeEntryId === 'string')
+            return Number(timeEntryId.split('_')[0])
+        else
+            return -1
     }
-    private _WorklogIdFromTimeEntryId(timeEntryId: string): number {
-        return Number(timeEntryId.split('_')[1])
+    private _WorklogIdFromTimeEntryId(timeEntryId: string | number): number {
+        if (typeof timeEntryId === 'string')
+            return Number(timeEntryId.split('_')[1])
+        return -1
     }
 
 
