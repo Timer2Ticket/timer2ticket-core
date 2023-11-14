@@ -124,15 +124,11 @@ export class jiraSyncedService implements SyncedService {
      * @param serviceObject serviceObject based on real object in primary service to extract name and possibly type for
      */
     updateServiceObject(objectId: string | number, serviceObject: ServiceObject): Promise<ServiceObject> {
-        return new Promise((resolve, reject) => {
-            reject(new ServiceObject(1, 'Jira', 'Project'))
-        })
+        throw new Error('Updating Service objects in Jira is not allowed')
     }
 
     deleteServiceObject(id: string | number, objectType: string): Promise<boolean> {
-        return new Promise((resolve, reject) => {
-            reject(false)
-        })
+        throw new Error('Deleting Service objects in Jira is not allowed')
     }
 
     /**
