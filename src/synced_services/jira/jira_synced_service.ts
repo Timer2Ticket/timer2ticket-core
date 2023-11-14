@@ -195,14 +195,14 @@ export class jiraSyncedService implements SyncedService {
                     if (response.body.fields.worklog) {
                         const worklogs = response.body.worklogs
                         worklogs.forEach((worklog: any) => {
-                            timeEntries.push(new JiraTimeEntry(worklog.id,
+                            timeEntries.push(new JiraTimeEntry(
+                                this._CreateTimeEntryId(issue.id, worklog.id),
                                 projectId,
                                 worklog.comment.content[0].content[0].text,
                                 worklog.started,
                                 worklog.started, //TODO calculate from start
                                 worklog.timeSpentInSeconds * 1000,
                                 worklog.updated,
-                                worklog.issueId
                             ))
                         })
                     }
@@ -265,14 +265,14 @@ export class jiraSyncedService implements SyncedService {
             return null
         }
 
-        const newTimeEntry = new JiraTimeEntry(response.body.id,
+        const newTimeEntry = new JiraTimeEntry(
+            this._CreateTimeEntryId(issueId, response.body.id),
             projectId,
             response.body.comment.content[0].content[0].text,
             response.body.started,
             response.body.started, //TODO calculate from start
             response.body.timeSpentInSeconds * 1000,
-            response.body.updated,
-            response.body.issueId)
+            response.body.updated)
         return newTimeEntry
     }
 
@@ -280,10 +280,9 @@ export class jiraSyncedService implements SyncedService {
      * Delete time entry with given id, returns true if successfully deleted
      * @param id of the time entry to delete from the service
      */
-    deleteTimeEntry(id: string | number): Promise<boolean> {
-        return new Promise((resolve, reject) => {
-            reject(false)
-        })
+    async deleteTimeEntry(id: string | number): Promise<boolean> {
+        //TODO issue ID needed to remove time entry
+        return false
     }
 
     /**
@@ -299,6 +298,17 @@ export class jiraSyncedService implements SyncedService {
         return new Promise((resolve, reject) => {
             reject(null)
         })
+    }
+
+    private _CreateTimeEntryId(issueId: number | string, worklogId: number | string): string {
+        return `${issueId}_${worklogId}`
+    }
+
+    private _IssueIdFromTimeEntryId(timeEntryId: string): number {
+        return Number(timeEntryId.split('_')[0])
+    }
+    private _WorklogIdFromTimeEntryId(timeEntryId: string): number {
+        return Number(timeEntryId.split('_')[1])
     }
 
 
