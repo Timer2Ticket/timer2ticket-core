@@ -136,7 +136,7 @@ export class jiraSyncedService implements SyncedService {
      * @param serviceObject 
      */
     getFullNameForServiceObject(serviceObject: ServiceObject): string {
-        return ''
+        return ServiceObject.name
     }
 
     /**
