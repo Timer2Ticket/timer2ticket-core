@@ -196,13 +196,16 @@ export class jiraSyncedService implements SyncedService {
                     if (response.body.fields.worklog) {
                         const worklogs = response.body.worklogs
                         worklogs.forEach((worklog: any) => {
+                            const durationInMilliseconds = worklog.timeSpentInSeconds * 1000
+                            const teStart = new Date(worklog.started)
+
                             timeEntries.push(new JiraTimeEntry(
-                                this._CreateTimeEntryId(issue.id, worklog.id),
+                                this._createTimeEntryId(issue.id, worklog.id),
                                 projectId,
                                 worklog.comment.content[0].content[0].text,
-                                worklog.started,
-                                worklog.started, //TODO calculate from start
-                                worklog.timeSpentInSeconds * 1000,
+                                teStart,
+                                this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds), //TODO calculate from start
+                                durationInMilliseconds,
                                 worklog.updated,
                             ))
                         })
@@ -219,8 +222,8 @@ export class jiraSyncedService implements SyncedService {
      * Returns only one time entry based on given id
      */
     async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
-        const issueId = this._IssueIdFromTimeEntryId(id)
-        const worklogId = this._WorklogIdFromTimeEntryId(id)
+        const issueId = this._issueIdFromTimeEntryId(id)
+        const worklogId = this._worklogIdFromTimeEntryId(id)
         let response
         try {
             response = await superagent
@@ -298,7 +301,7 @@ export class jiraSyncedService implements SyncedService {
         }
 
         const newTimeEntry = new JiraTimeEntry(
-            this._CreateTimeEntryId(issueId, response.body.id),
+            this._createTimeEntryId(issueId, response.body.id),
             projectId,
             response.body.comment.content[0].content[0].text,
             response.body.started,
@@ -313,8 +316,8 @@ export class jiraSyncedService implements SyncedService {
      * @param id of the time entry to delete from the service
      */
     async deleteTimeEntry(id: string | number): Promise<boolean> {
-        const issueId = this._IssueIdFromTimeEntryId(id)
-        const worklogId = this._WorklogIdFromTimeEntryId(id)
+        const issueId = this._issueIdFromTimeEntryId(id)
+        const worklogId = this._worklogIdFromTimeEntryId(id)
         if (issueId === -1 || worklogId === -1)
             return false
         let response
@@ -343,7 +346,7 @@ export class jiraSyncedService implements SyncedService {
             const obj = mapping.mappingsObjects.find(o => o.service === this._serviceName)
             if (obj) {
                 if ((obj.id === timeEntry.projectId && obj.type === this._projectsType)
-                    || (obj.id === this._IssueIdFromTimeEntryId(timeEntry.id) && obj.type === this._issuesType)
+                    || (obj.id === this._issueIdFromTimeEntryId(timeEntry.id) && obj.type === this._issuesType)
                 ) {
                     const notJiraMappings = mapping.mappingsObjects.filter(o => o.name !== this._serviceName)
                     //push other than Jira
@@ -361,17 +364,17 @@ export class jiraSyncedService implements SyncedService {
         })
     }
 
-    private _CreateTimeEntryId(issueId: number | string, worklogId: number | string): string {
+    private _createTimeEntryId(issueId: number | string, worklogId: number | string): string {
         return `${issueId}_${worklogId}`
     }
 
-    private _IssueIdFromTimeEntryId(timeEntryId: string | number): number {
+    private _issueIdFromTimeEntryId(timeEntryId: string | number): number {
         if (typeof timeEntryId === 'string')
             return Number(timeEntryId.split('_')[0])
         else
             return -1
     }
-    private _WorklogIdFromTimeEntryId(timeEntryId: string | number): number {
+    private _worklogIdFromTimeEntryId(timeEntryId: string | number): number {
         if (typeof timeEntryId === 'string')
             return Number(timeEntryId.split('_')[1])
         return -1
