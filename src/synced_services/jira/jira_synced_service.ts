@@ -56,17 +56,16 @@ export class jiraSyncedService implements SyncedService {
    * returns false in case of any error
    */
     async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+        const allServiceObjects: ServiceObject[] = []
         const projects = await this._getAllProjects()
-        if (projects.length === 0) {
-            return false
-        }
+        allServiceObjects.push(...projects)
+
         const issues = await this._getIssues(projects)
+        if (issues.length >= 1 && projects.length === 0)
+            return false
+        allServiceObjects.push(...issues)
 
-
-
-        return new Promise((resolve, reject) => {
-            reject(false)
-        })
+        return allServiceObjects
     }
 
     private async _getAllProjects(): Promise<ServiceObject[]> {
@@ -93,7 +92,11 @@ export class jiraSyncedService implements SyncedService {
     }
 
     private async _getIssues(projects: ServiceObject[]): Promise<ServiceObject[]> {
-        //TODO get all issues per project - not easy think about it more
+        const issues: ServiceObject[] = []
+        for (const project of projects) {
+            const issuesOfProject = await this._getIssuesOfProject(project.id)
+            issues.push(...issuesOfProject)
+        }
         return []
     }
     private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
@@ -122,9 +125,8 @@ export class jiraSyncedService implements SyncedService {
         return issues
     }
 
-    private _generateTimeEntriesQuery(projectIdOrKey: string | number, startAt: number, start?: Date, end?: Date): string {
-        let query = `jql=project=${projectIdOrKey}&startAt=${startAt}`
-
+    private _generateTimeEntriesQuery(projectIdOrKey: string | number, startAtPageNumber: number, start?: Date, end?: Date): string {
+        let query = `jql=project=${projectIdOrKey}&startAt=${startAtPageNumber}`
         return query
     }
 
@@ -140,18 +142,9 @@ export class jiraSyncedService implements SyncedService {
         switch (objectType) {
             case this._issuesType:
                 throw new Error('Creating issues in Jira is not supported yet')
-            //return await this._createIssueObject(objectId, objectName, objectType, projectId)
-            // case this._projectsType:
-            //     throw new Error('Creating projects in Jira is not allowed')
             default:
-                throw new Error(`Unsupported type of ${objectType} in Jira`)
+                throw new Error(`Creating Service object types of ${objectType} is not allowed in Jira`)
         }
-    }
-
-    private async _createIssueObject(objectId: string | number, objectName: string, objectType: string, projectId: string | number): Promise<ServiceObject> {
-        return new Promise((resolve, reject) => {
-            reject(new ServiceObject(objectId, objectName, objectType))
-        })
     }
 
     /**
@@ -245,7 +238,7 @@ export class jiraSyncedService implements SyncedService {
         const teStart = new Date(myWorklog.started)
         const teEnd = this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds)
 
-        const timeEntry = new JiraTimeEntry(
+        return new JiraTimeEntry(
             id,
             response.body.fields.project.id,
             myWorklog.comment.content.text,
@@ -254,9 +247,6 @@ export class jiraSyncedService implements SyncedService {
             durationInMilliseconds,
             new Date(myWorklog.updated)
         )
-
-
-        return timeEntry
     }
 
     /**
@@ -355,15 +345,13 @@ export class jiraSyncedService implements SyncedService {
                     results.push(...notJiraMappings)
                 }
             }
-
         }
         return results
     }
 
-    getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
-        return new Promise((resolve, reject) => {
-            reject(null)
-        })
+    async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
+        //TODO whole function
+        return null
     }
 
     private _createTimeEntryId(issueId: number | string, worklogId: number | string): string {
