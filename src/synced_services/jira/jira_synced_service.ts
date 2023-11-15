@@ -17,6 +17,7 @@ export class jiraSyncedService implements SyncedService {
     private _domain: string
     private _apiKey: string
     private _userEmail: string
+    private _secret: string
 
     private _issueUri: string
     private _projectUri: string
@@ -24,6 +25,7 @@ export class jiraSyncedService implements SyncedService {
     private _projectsType: string
     private _issuesType: string
     private _maxResultsPerSearch: number
+    private _serviceName: string
 
 
     errors: Array<Timer2TicketError>;
@@ -34,6 +36,8 @@ export class jiraSyncedService implements SyncedService {
         this._domain = syncedServiceDefinition.config.domain!
         this._apiKey = syncedServiceDefinition.config.apiKey
         this._userEmail = syncedServiceDefinition.config.userEmail!
+        this._serviceName = syncedServiceDefinition.name
+        this._secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
 
         this._issueUri = `${this._domain}api/3/issue`
         this._projectUri = `${this._domain}api/3/project`
@@ -172,7 +176,7 @@ export class jiraSyncedService implements SyncedService {
      * @param serviceObject 
      */
     getFullNameForServiceObject(serviceObject: ServiceObject): string {
-        return ServiceObject.name
+        return serviceObject.name
     }
 
     /**
@@ -217,10 +221,42 @@ export class jiraSyncedService implements SyncedService {
     /**
      * Returns only one time entry based on given id
      */
-    getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
-        return new Promise((resolve, reject) => {
-            reject(null)
-        })
+    async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
+        const issueId = this._IssueIdFromTimeEntryId(id)
+        const worklogId = this._WorklogIdFromTimeEntryId(id)
+        let response
+        try {
+            response = await superagent
+                .get(`${this._issueUri}/${issueId}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .accept('application/json')
+        } catch (ex: any) {
+            return null
+        }
+        if (!response || !response.ok || response.body.fields.worklog.total === 0) {
+            return null
+        }
+
+        const worklogs = response.body.fields.worklog.worklogs
+        const myWorklog = worklogs.find((w: any) => w.id === worklogId)
+        if (!myWorklog)
+            return null
+        const durationInMilliseconds = myWorklog.timeSpentInSeconds * 1000
+        const teStart = new Date(myWorklog.started)
+        const teEnd = this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds)
+
+        const timeEntry = new JiraTimeEntry(
+            id,
+            response.body.fields.project.id,
+            myWorklog.comment.content.text,
+            teStart,
+            teEnd,
+            durationInMilliseconds,
+            new Date(myWorklog.updated)
+        )
+
+
+        return timeEntry
     }
 
     /**
@@ -299,12 +335,28 @@ export class jiraSyncedService implements SyncedService {
     }
 
     /**
-     * Extracts objects from specific timeEntry, e.g. toggl extracts projectId from projectId, issue and time entry activity from TE's tags
+     * Extracts objects from specific timeEntry other than Jira
      * @param timeEntry timeEntry object from which mappingsObjects are extracting - each specific manager has its specific time entry instance (e.g. TogglTimeEntry)
      * @param mappings user's mappings where to find mappingsObjects (by id)
      */
     extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
-        return []
+        if (!(timeEntry instanceof JiraTimeEntry))
+            return []
+        const results: MappingsObject[] = []
+        for (const mapping of mappings) {
+            const obj = mapping.mappingsObjects.find(o => o.service === this._serviceName)
+            if (obj) {
+                if ((obj.id === timeEntry.projectId && obj.type === this._projectsType)
+                    || (obj.id === this._IssueIdFromTimeEntryId(timeEntry.id) && obj.type === this._issuesType)
+                ) {
+                    const notJiraMappings = mapping.mappingsObjects.filter(o => o.name !== this._serviceName)
+                    //push other than Jira
+                    results.push(...notJiraMappings)
+                }
+            }
+
+        }
+        return results
     }
 
     getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
@@ -327,6 +379,10 @@ export class jiraSyncedService implements SyncedService {
         if (typeof timeEntryId === 'string')
             return Number(timeEntryId.split('_')[1])
         return -1
+    }
+
+    private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
+        return new Date(start)
     }
 
 
