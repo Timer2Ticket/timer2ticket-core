@@ -204,9 +204,9 @@ export class jiraSyncedService implements SyncedService {
                                 projectId,
                                 worklog.comment.content[0].content[0].text,
                                 teStart,
-                                this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds), //TODO calculate from start
+                                this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
                                 durationInMilliseconds,
-                                worklog.updated,
+                                new Date(worklog.updated),
                             ))
                         })
                     }
@@ -300,14 +300,16 @@ export class jiraSyncedService implements SyncedService {
             return null
         }
 
+        const teStart = new Date(response.body.started)
+
         const newTimeEntry = new JiraTimeEntry(
             this._createTimeEntryId(issueId, response.body.id),
             projectId,
             response.body.comment.content[0].content[0].text,
-            response.body.started,
-            response.body.started, //TODO calculate from start
-            response.body.timeSpentInSeconds * 1000,
-            response.body.updated)
+            teStart,
+            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
+            durationInMilliseconds,
+            new Date(response.body.updated))
         return newTimeEntry
     }
 
@@ -381,7 +383,7 @@ export class jiraSyncedService implements SyncedService {
     }
 
     private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
-        return new Date(start)
+        return new Date(start.getTime() + durationInMilliseconds)
     }
 
 
