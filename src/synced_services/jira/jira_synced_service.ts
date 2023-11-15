@@ -70,12 +70,11 @@ export class jiraSyncedService implements SyncedService {
     }
 
     private async _getAllProjects(): Promise<ServiceObject[]> {
-        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
         let response
         try {
             response = await superagent
                 .get(this._projectUri)
-                .set('Authorization', `Basic ${secret}`)
+                .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
                 .type('application/json')
         } catch (ex: any) {
@@ -99,7 +98,6 @@ export class jiraSyncedService implements SyncedService {
     }
     private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
-        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
 
         let total = 1
         let received = 0
@@ -109,7 +107,7 @@ export class jiraSyncedService implements SyncedService {
             try {
                 response = await superagent
                     .get(`${this._searchUri}?${query}`)
-                    .set('Authorization', `Basic ${secret}`)
+                    .set('Authorization', `Basic ${this._secret}`)
                     .accept('application/json')
             } catch (ex: any) {
                 return []
@@ -184,7 +182,6 @@ export class jiraSyncedService implements SyncedService {
      */
     async getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[]> {
         const timeEntries: JiraTimeEntry[] = []
-        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
         const projectId = 'T2T' //TODO for each
 
         const projects = await this._getAllProjects()
@@ -194,7 +191,7 @@ export class jiraSyncedService implements SyncedService {
                 try {
                     const response = await superagent
                         .get(`${this._issueUri}/${issue.id}/worklog`)
-                        .set('Authorization', `Basic ${secret}`)
+                        .set('Authorization', `Basic ${this._secret}`)
                         .accept('application/json')
                     if (response.body.fields.worklog) {
                         const worklogs = response.body.worklogs
@@ -270,7 +267,6 @@ export class jiraSyncedService implements SyncedService {
     async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
         const projectId = 'T2T' //TODO, get from additional data
         const issueId = 25 // TODO get from additional data
-        const secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
         const data = {
             "comment": {
                 "content": [
@@ -294,7 +290,7 @@ export class jiraSyncedService implements SyncedService {
         try {
             response = await superagent
                 .post(`${this._issueUri}/${issueId}/worklog`)
-                .set('Authorization', `Basic ${secret}`)
+                .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
                 .send(data)
         } catch (ex: any) {
