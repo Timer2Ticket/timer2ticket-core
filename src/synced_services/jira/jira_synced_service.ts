@@ -175,7 +175,6 @@ export class jiraSyncedService implements SyncedService {
      */
     async getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[]> {
         const timeEntries: JiraTimeEntry[] = []
-        const projectId = 'T2T' //TODO for each
 
         const projects = await this._getAllProjects()
         for (const project of projects) {
@@ -194,7 +193,7 @@ export class jiraSyncedService implements SyncedService {
 
                             timeEntries.push(new JiraTimeEntry(
                                 this._createTimeEntryId(issue.id, worklog.id),
-                                projectId,
+                                project.id,
                                 worklog.comment.content[0].content[0].text,
                                 teStart,
                                 this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
@@ -204,6 +203,7 @@ export class jiraSyncedService implements SyncedService {
                         })
                     }
                 } catch (ex: any) {
+                    //TODO
                     return timeEntries
                 }
             }
@@ -258,8 +258,22 @@ export class jiraSyncedService implements SyncedService {
      * @param additionalData 
      */
     async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
-        const projectId = 'T2T' //TODO, get from additional data
-        const issueId = 25 // TODO get from additional data
+        let projectId
+        let issueId //issue Id would be enough if project id was not aprt of Time Entry object
+
+        for (const data of additionalData) {
+            if (data.type === this._projectsType) {
+                projectId = data.id
+            } else if (data.type === this._issuesType) {
+                issueId = data.id
+            }
+        }
+
+        if (!issueId || !projectId) {
+            //both are required (project maybe not, depends on the design TODO)
+            return null
+        }
+
         const data = {
             "comment": {
                 "content": [
