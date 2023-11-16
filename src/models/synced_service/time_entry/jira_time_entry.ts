@@ -1,6 +1,7 @@
 import { TimeEntry } from "./time_entry";
 
 export class JiraTimeEntry implements TimeEntry {
+    //ID is in format <jiraIssueId>_<worklogId>, because time entry ID itself is not unique
     id: number | string;
     projectId: number | string;
     text: string;
