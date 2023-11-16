@@ -114,6 +114,7 @@ export class jiraSyncedService implements SyncedService {
                     .accept('application/json')
             } catch (ex: any) {
                 return []
+                //TODO better
             }
             total = response.body.total
             const responseIssues = response.body.issues
@@ -236,14 +237,13 @@ export class jiraSyncedService implements SyncedService {
             return null
         const durationInMilliseconds = myWorklog.timeSpentInSeconds * 1000
         const teStart = new Date(myWorklog.started)
-        const teEnd = this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds)
 
         return new JiraTimeEntry(
             id,
             response.body.fields.project.id,
             myWorklog.comment[0].content[0].text,
             teStart,
-            teEnd,
+            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
             durationInMilliseconds,
             new Date(myWorklog.updated)
         )
