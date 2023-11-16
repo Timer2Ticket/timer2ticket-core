@@ -241,7 +241,7 @@ export class jiraSyncedService implements SyncedService {
         return new JiraTimeEntry(
             id,
             response.body.fields.project.id,
-            myWorklog.comment.content.text,
+            myWorklog.comment[0].content[0].text,
             teStart,
             teEnd,
             durationInMilliseconds,
@@ -364,8 +364,47 @@ export class jiraSyncedService implements SyncedService {
     }
 
     async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
-        //TODO whole function
-        return null
+        if (mapping.primaryObjectType !== this._issuesType) {
+            return null
+        }
+        const jiraServiceDefinition = Connection.findServiceDefinitionByName(this._serviceName, connection)
+        if (jiraServiceDefinition === undefined) {
+            return null
+        }
+
+        const issueId = mapping.primaryObjectId
+
+        const timeEntries: TimeEntry[] = []
+
+        let response
+        try {
+            response = await superagent
+                .get(`${this._issueUri}/${issueId}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .accept('application/json')
+        } catch (ex: any) {
+            //todo maybe something more
+            return null
+        }
+        if (!response || !response.ok)
+            return null
+
+        const issue = response.body
+        for (const worklog of issue.fields.worklog.worklogs) {
+            const start = new Date(worklog.started)
+            const durationInMiliseconds = worklog.timeSpentSeconds
+            const timeEntry = new JiraTimeEntry(
+                this._createTimeEntryId(issueId, worklog.id),
+                issue.fields.project.id,
+                worklog.comment.content[0].content[0].text,
+                start,
+                this._calculateEndfromStartAndDuration(start, durationInMiliseconds),
+                durationInMiliseconds,
+                new Date(worklog.updated)
+            )
+            timeEntries.push(timeEntry)
+        }
+        return timeEntries
     }
 
     private _createTimeEntryId(issueId: number | string, worklogId: number | string): string {
@@ -387,6 +426,4 @@ export class jiraSyncedService implements SyncedService {
     private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
         return new Date(start.getTime() + durationInMilliseconds)
     }
-
-
 }
