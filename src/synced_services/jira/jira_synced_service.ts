@@ -39,9 +39,9 @@ export class jiraSyncedService implements SyncedService {
         this._serviceName = syncedServiceDefinition.name
         this._secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
 
-        this._issueUri = `${this._domain}api/3/issue`
-        this._projectUri = `${this._domain}api/3/project`
-        this._searchUri = `${this._domain}/api/3/search`
+        this._issueUri = `${this._domain}rest/api/3/issue/`
+        this._projectUri = `${this._domain}rest/api/3/project/`
+        this._searchUri = `${this._domain}rest/api/3/search/`
         this._projectsType = 'project'
         this._issuesType = 'issue'
         this._maxResultsPerSearch = 50
@@ -57,6 +57,7 @@ export class jiraSyncedService implements SyncedService {
    */
     async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
         const allServiceObjects: ServiceObject[] = []
+        console.log(`ted jdu volat projekty na url ${this._projectUri}`)
         const projects = await this._getAllProjects()
         allServiceObjects.push(...projects)
 
@@ -74,20 +75,20 @@ export class jiraSyncedService implements SyncedService {
             response = await superagent
                 .get(this._projectUri)
                 .set('Authorization', `Basic ${this._secret}`)
-                .accept('application/json')
-                .type('application/json')
+            //.accept('application/json')
+            //.type('application/json')
         } catch (ex: any) {
             //TODO
+            console.log('neco se pokazilo pri dotazu na vsechny projekty')
+            console.log(ex)
             return []
         }
         const projects: ServiceObject[] = []
         response.body?.forEach((project: any) => {
             projects.push(
-                new ServiceObject(project.id, project.name, project._projectsType)
+                new ServiceObject(project.id, project.name, this._projectsType)
             )
         })
-        console.log('Projects are:')
-        console.log(projects)
         return projects
     }
 
@@ -97,8 +98,11 @@ export class jiraSyncedService implements SyncedService {
             const issuesOfProject = await this._getIssuesOfProject(project.id)
             issues.push(...issuesOfProject)
         }
-        return []
+        return issues
     }
+
+
+
     private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
 
@@ -181,31 +185,36 @@ export class jiraSyncedService implements SyncedService {
         for (const project of projects) {
             const issues = await this._getIssuesOfProject(project.id, start, end)
             for (const issue of issues) {
+                let response
                 try {
-                    const response = await superagent
+                    response = await superagent
                         .get(`${this._issueUri}/${issue.id}/worklog`)
                         .set('Authorization', `Basic ${this._secret}`)
                         .accept('application/json')
-                    if (response.body.fields.worklog) {
-                        const worklogs = response.body.worklogs
-                        worklogs.forEach((worklog: any) => {
-                            const durationInMilliseconds = worklog.timeSpentInSeconds * 1000
-                            const teStart = new Date(worklog.started)
-
-                            timeEntries.push(new JiraTimeEntry(
-                                this._createTimeEntryId(issue.id, worklog.id),
-                                project.id,
-                                worklog.comment.content[0].content[0].text,
-                                teStart,
-                                this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
-                                durationInMilliseconds,
-                                new Date(worklog.updated),
-                            ))
-                        })
-                    }
                 } catch (ex: any) {
                     //TODO
+                    console.log(`neco se pokazilo pri hledani worklogu`)
+                    console.log(ex)
                     return timeEntries
+                }
+                console.log(response.body)
+                if (response.body.total > 0 && response.body.worklogs) {
+                    const worklogs = response.body.worklogs
+                    worklogs.forEach((worklog: any) => {
+                        const durationInMilliseconds = worklog.timeSpentSeconds * 1000
+                        const teStart = new Date(worklog.started)
+                        const text = worklog.comment && worklog.comment.content[0].content[0].text ?
+                            worklog.comment.content[0].content[0].text : ''
+                        timeEntries.push(new JiraTimeEntry(
+                            this._createTimeEntryId(issue.id, worklog.id),
+                            project.id,
+                            text,
+                            teStart,
+                            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
+                            durationInMilliseconds,
+                            new Date(worklog.updated),
+                        ))
+                    })
                 }
             }
         }
@@ -230,18 +239,21 @@ export class jiraSyncedService implements SyncedService {
         if (!response || !response.ok || response.body.fields.worklog.total === 0) {
             return null
         }
-
         const worklogs = response.body.fields.worklog.worklogs
-        const myWorklog = worklogs.find((w: any) => w.id === worklogId)
-        if (!myWorklog)
+        const myWorklog = worklogs.find((w: any) => w.id == worklogId)
+        if (!myWorklog) {
             return null
-        const durationInMilliseconds = myWorklog.timeSpentInSeconds * 1000
-        const teStart = new Date(myWorklog.started)
 
+        }
+
+        const durationInMilliseconds = myWorklog.timeSpentSeconds * 1000
+        const teStart = new Date(myWorklog.started)
+        const text = myWorklog.comment && myWorklog.comment.content[0].content[0].text ?
+            myWorklog.comment.content[0].content[0].text : ''
         return new JiraTimeEntry(
             id,
             response.body.fields.project.id,
-            myWorklog.comment[0].content[0].text,
+            text,
             teStart,
             this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
             durationInMilliseconds,
@@ -424,6 +436,7 @@ export class jiraSyncedService implements SyncedService {
     }
 
     private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
+
         return new Date(start.getTime() + durationInMilliseconds)
     }
 }
