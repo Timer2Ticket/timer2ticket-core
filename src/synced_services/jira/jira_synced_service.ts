@@ -57,7 +57,6 @@ export class jiraSyncedService implements SyncedService {
    */
     async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
         const allServiceObjects: ServiceObject[] = []
-        console.log(`ted jdu volat projekty na url ${this._projectUri}`)
         const projects = await this._getAllProjects()
         allServiceObjects.push(...projects)
 
@@ -197,7 +196,6 @@ export class jiraSyncedService implements SyncedService {
                     console.log(ex)
                     return timeEntries
                 }
-                console.log(response.body)
                 if (response.body.total > 0 && response.body.worklogs) {
                     const worklogs = response.body.worklogs
                     worklogs.forEach((worklog: any) => {
@@ -305,7 +303,7 @@ export class jiraSyncedService implements SyncedService {
                 "version": 1
             },
             "started": modifiedStart,
-            "timeSpentSeconds": (durationInMilliseconds * 1000)
+            "timeSpentSeconds": (durationInMilliseconds / 1000)
         }
         let response
         try {
@@ -339,7 +337,6 @@ export class jiraSyncedService implements SyncedService {
     async deleteTimeEntry(id: string | number): Promise<boolean> {
         const issueId = this._issueIdFromTimeEntryId(id)
         const worklogId = this._worklogIdFromTimeEntryId(id)
-        console.log(issueId, worklogId)
         if (issueId === -1 || worklogId === -1)
             return false
         let response

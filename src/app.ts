@@ -1,14 +1,14 @@
 import * as Sentry from '@sentry/node';
-import express, {Request, Response} from 'express';
-import {Queue} from 'typescript-collections';
+import express, { Request, Response } from 'express';
+import { Queue } from 'typescript-collections';
 import cron from 'node-cron';
-import {ConfigSyncJob} from './jobs/config_sync_job';
-import {SyncJob} from './jobs/sync_job';
-import {TimeEntriesSyncJob} from './jobs/time_entries_sync_job';
-import {Constants} from './shared/constants';
-import {databaseService} from './shared/database_service';
-import {Connection} from "./models/connection/connection";
-import {ObjectId} from "mongodb";
+import { ConfigSyncJob } from './jobs/config_sync_job';
+import { SyncJob } from './jobs/sync_job';
+import { TimeEntriesSyncJob } from './jobs/time_entries_sync_job';
+import { Constants } from './shared/constants';
+import { databaseService } from './shared/database_service';
+import { Connection } from "./models/connection/connection";
+import { ObjectId } from "mongodb";
 
 Sentry.init({
     dsn: Constants.sentryDsn,
@@ -16,7 +16,7 @@ Sentry.init({
 });
 
 const app = express();
-app.use(express.urlencoded({extended: false}));
+app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // queue for ConfigSyncJobs (CSJs) or TimeEntriesSyncJobs (TESJs)
@@ -93,12 +93,12 @@ app.listen(Constants.appPort, async () => {
         let res = true;
 
         const connectionsToDelete = await databaseService.getConnectionsToDelete();
-        for(const connection of connectionsToDelete) {
+        for (const connection of connectionsToDelete) {
             res = res && await databaseService.deleteTimeEntrySyncedObjectByConnection(connection._id);
         }
 
         const cleanUpConnectionsResult = await databaseService.cleanUpConnections();
-        if(!cleanUpConnectionsResult) {
+        if (!cleanUpConnectionsResult) {
             res = false;
         }
         if (!res) {
@@ -165,9 +165,9 @@ app.post('/api/v2/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (
 });
 
 // Schedule jobs for connection
-app.post('/api/v2/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
+app.post('/api/v2/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => { //    ([a-zA-Z0-9]{24})
     const connectionId = req.params.connectionId;
-
+    console.log(req.params.connectionId)
     const responseCode = await updateConnection(connectionId, true);
     if (responseCode === null) {
         return res.sendStatus(201);
@@ -203,7 +203,6 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
 async function updateConnection(connectionId: string, isCreated: boolean): Promise<number | null> {
     const configTask = activeUsersScheduledConfigSyncTasks.get(connectionId);
     const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(connectionId);
-
     let connectionObjectId;
     try {
         connectionObjectId = new ObjectId(connectionId);
@@ -232,6 +231,7 @@ async function updateConnection(connectionId: string, isCreated: boolean): Promi
         return 404;
     }
 
+
     if (connection.isActive && isCreated) {
         // schedule CSJ right now
         const jobLog = await databaseService.createJobLog(connection, 'config', 't2t-auto');
@@ -242,7 +242,7 @@ async function updateConnection(connectionId: string, isCreated: boolean): Promi
     }
 
     // and schedule next CSJs and TESJs by the user's normal schedule
-    if(connection.isActive) {
+    if (connection.isActive) {
         scheduleJobs(connection);
     }
 
@@ -271,8 +271,8 @@ async function scheduleJobs(connection: Connection) {
                     }
                 }
             }, {
-                timezone: actualUser.timeZone,
-            }
+            timezone: actualUser.timeZone,
+        }
         );
         activeUsersScheduledConfigSyncTasks.set(connection._id.toString(), task);
     }
@@ -291,8 +291,8 @@ async function scheduleJobs(connection: Connection) {
                     }
                 }
             }, {
-                timezone: actualUser.timeZone,
-            }
+            timezone: actualUser.timeZone,
+        }
         );
         activeUsersScheduledTimeEntriesSyncTasks.set(connection._id.toString(), task);
     }

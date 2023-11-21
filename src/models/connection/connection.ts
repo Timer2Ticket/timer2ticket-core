@@ -1,7 +1,7 @@
 import { ObjectId } from 'mongodb';
-import {Mapping} from "./mapping/mapping";
-import {SyncJobDefinition} from "./config/sync_job_definition";
-import {SyncedServiceDefinition} from "./config/synced_service_definition";
+import { Mapping } from "./mapping/mapping";
+import { SyncJobDefinition } from "./config/sync_job_definition";
+import { SyncedServiceDefinition } from "./config/synced_service_definition";
 
 export class Connection {
   // Mongo
@@ -38,9 +38,10 @@ export class Connection {
   }
 
   static getPrimaryServiceDefinition(connection: Connection): SyncedServiceDefinition | undefined {
-    if (connection.firstService.name === 'Redmine') {
+    //TODO dramatic changes whe implementing ticket-ticket will be needed
+    if (connection.firstService.name === 'Redmine' || connection.firstService.name === 'Jira') {
       return connection.firstService;
-    } else if (connection.secondService.name === 'Redmine') {
+    } else if (connection.secondService.name === 'Redmine' || connection.secondService.name === 'Jira') {
       return connection.secondService;
     } else {
       return undefined;
@@ -48,9 +49,9 @@ export class Connection {
   }
 
   static getSecondaryServiceDefinition(connection: Connection): SyncedServiceDefinition {
-    if (connection.firstService.name !== 'Redmine') {
+    if (connection.firstService.name === 'Toggl Track') {
       return connection.firstService;
-    } else if (connection.secondService.name !== 'Redmine') {
+    } else if (connection.secondService.name === 'Toggl Track') {
       return connection.secondService;
     } else {
       throw "Cannot occur because two same services cannot be connected"
