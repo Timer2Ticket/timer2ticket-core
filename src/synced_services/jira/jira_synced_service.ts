@@ -272,7 +272,6 @@ export class jiraSyncedService implements SyncedService {
     async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
         let projectId
         let issueId //issue Id would be enough if project id was not aprt of Time Entry object
-
         for (const data of additionalData) {
             if (data.type === this._projectsType) {
                 projectId = data.id
@@ -280,11 +279,14 @@ export class jiraSyncedService implements SyncedService {
                 issueId = data.id
             }
         }
-
         if (!issueId || !projectId) {
-            //both are required (project maybe not, depends on the design TODO)
+            //both are required (project ID needed for internal T2T save)
             return null
         }
+        //date format in iso string was not working. expts ending with +000 instead of Z
+        let modifiedStart = start.toISOString()
+        modifiedStart = modifiedStart.slice(0, modifiedStart.length - 1)
+        modifiedStart += '+0000'
 
         const data = {
             "comment": {
@@ -302,8 +304,8 @@ export class jiraSyncedService implements SyncedService {
                 "type": "doc",
                 "version": 1
             },
-            "started": start,
-            "timeSpentSeconds": durationInMilliseconds * 1000
+            "started": modifiedStart,
+            "timeSpentSeconds": (durationInMilliseconds * 1000)
         }
         let response
         try {
@@ -313,6 +315,7 @@ export class jiraSyncedService implements SyncedService {
                 .accept('application/json')
                 .send(data)
         } catch (ex: any) {
+            console.log(ex)
             return null
         }
 
@@ -336,13 +339,16 @@ export class jiraSyncedService implements SyncedService {
     async deleteTimeEntry(id: string | number): Promise<boolean> {
         const issueId = this._issueIdFromTimeEntryId(id)
         const worklogId = this._worklogIdFromTimeEntryId(id)
+        console.log(issueId, worklogId)
         if (issueId === -1 || worklogId === -1)
             return false
         let response
         try {
             response = await superagent
                 .delete(`${this._issueUri}/${issueId}/worklog/${worklogId}`)
-        } catch {
+                .set('Authorization', `Basic ${this._secret}`)
+        } catch (ex: any) {
+            console.log(ex)
             return false
         }
         if (response.status !== 204)
@@ -357,6 +363,7 @@ export class jiraSyncedService implements SyncedService {
      * @param mappings user's mappings where to find mappingsObjects (by id)
      */
     extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
+        //TODO test
         if (!(timeEntry instanceof JiraTimeEntry))
             return []
         const results: MappingsObject[] = []
@@ -376,6 +383,7 @@ export class jiraSyncedService implements SyncedService {
     }
 
     async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
+        //TODO test
         if (mapping.primaryObjectType !== this._issuesType) {
             return null
         }
@@ -395,7 +403,8 @@ export class jiraSyncedService implements SyncedService {
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
         } catch (ex: any) {
-            //todo maybe something more
+            console.log(ex)
+            //todo
             return null
         }
         if (!response || !response.ok)
