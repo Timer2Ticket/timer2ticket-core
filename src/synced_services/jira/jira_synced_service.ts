@@ -77,9 +77,7 @@ export class jiraSyncedService implements SyncedService {
             //.accept('application/json')
             //.type('application/json')
         } catch (ex: any) {
-            //TODO
-            console.log('neco se pokazilo pri dotazu na vsechny projekty')
-            console.log(ex)
+            this.handleResponseException(ex, 'Get jira projects', this._projectUri)
             return []
         }
         const projects: ServiceObject[] = []
@@ -116,8 +114,8 @@ export class jiraSyncedService implements SyncedService {
                     .set('Authorization', `Basic ${this._secret}`)
                     .accept('application/json')
             } catch (ex: any) {
+                this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, this._issueUri)
                 return []
-                //TODO better
             }
             total = response.body.total
             const responseIssues = response.body.issues
@@ -191,10 +189,8 @@ export class jiraSyncedService implements SyncedService {
                         .set('Authorization', `Basic ${this._secret}`)
                         .accept('application/json')
                 } catch (ex: any) {
-                    //TODO
-                    console.log(`neco se pokazilo pri hledani worklogu`)
-                    console.log(ex)
-                    return timeEntries
+                    this.handleResponseException(ex, `getting all TEs`, `${this._issueUri}/${issue.id}/worklog`)
+                    continue
                 }
                 if (response.body.total > 0 && response.body.worklogs) {
                     const worklogs = response.body.worklogs
@@ -232,6 +228,7 @@ export class jiraSyncedService implements SyncedService {
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
         } catch (ex: any) {
+            this.handleResponseException(ex, `gettnig TE with id ${id}`, `${this._issueUri} / ${issueId}`)
             return null
         }
         if (!response || !response.ok || response.body.fields.worklog.total === 0) {
@@ -313,7 +310,7 @@ export class jiraSyncedService implements SyncedService {
                 .accept('application/json')
                 .send(data)
         } catch (ex: any) {
-            console.log(ex)
+            this.handleResponseException(ex, `create new TE in Jira`, `${this._issueUri}/${issueId}/worklog`)
             return null
         }
 
@@ -345,7 +342,7 @@ export class jiraSyncedService implements SyncedService {
                 .delete(`${this._issueUri}/${issueId}/worklog/${worklogId}`)
                 .set('Authorization', `Basic ${this._secret}`)
         } catch (ex: any) {
-            console.log(ex)
+            this.handleResponseException(ex, `deleting TE with id ${id}`, `${this._issueUri}/${issueId}/worklog/${worklogId}`)
             return false
         }
         if (response.status !== 204)
@@ -392,7 +389,6 @@ export class jiraSyncedService implements SyncedService {
         const issueId = mapping.primaryObjectId
 
         const timeEntries: TimeEntry[] = []
-
         let response
         try {
             response = await superagent
@@ -400,8 +396,7 @@ export class jiraSyncedService implements SyncedService {
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
         } catch (ex: any) {
-            console.log(ex)
-            //todo
+            this.handleResponseException(ex, `gettin TE related to mapping obj for connection`, `${this._issueUri}/${issueId}`)
             return null
         }
         if (!response || !response.ok)
@@ -442,7 +437,27 @@ export class jiraSyncedService implements SyncedService {
     }
 
     private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
-
         return new Date(start.getTime() + durationInMilliseconds)
     }
+
+    handleResponseException(ex: any, functionInfo: string, uri: string): void {
+        const status = ex.status
+        if (ex != undefined && (status === 403 || status === 401)) {
+            const error = this._errorService.createJiraError(ex)
+            const context = [
+                this._sentryService.createExtraContext("Exception", ex),
+                this._sentryService.createExtraContext('Status_code', status)
+            ]
+
+            error.data = 'User credentials Error, please check tour credentials'
+            const message = `${functionInfo} failed with status code ${status}\nCheck credentials or set user inactive`
+            this._sentryService.logJiraError(uri, message, context)
+            this.errors.push(error)
+        } else {
+            const message = `${functionInfo} failed with status code ${status}`
+            this._sentryService.logJiraError(uri, message)
+        }
+    }
+
+
 }
