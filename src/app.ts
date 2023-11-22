@@ -12,7 +12,7 @@ import { ObjectId } from "mongodb";
 
 Sentry.init({
     dsn: Constants.sentryDsn,
-    tracesSampleRate: 0.5,
+    tracesSampleRate: 1.0
 });
 
 const app = express();
