@@ -8,12 +8,12 @@ import { SyncedService } from "../synced_services/synced_service";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { MappingsObject } from "../models/connection/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
-import {captureException} from "@sentry/node";
+import { captureException } from "@sentry/node";
 import * as Sentry from "@sentry/node";
-import {JobLog} from "../models/job_log";
-import {Timer2TicketError} from "../models/timer2TicketError";
-import {Constants} from "../shared/constants";
-import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
+import { JobLog } from "../models/job_log";
+import { Timer2TicketError } from "../models/timer2TicketError";
+import { Constants } from "../shared/constants";
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -64,7 +64,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       const serviceTimeEntriesWrapper = new ServiceTimeEntriesWrapper(
         serviceDefinition,
         syncedService,
-        await syncedService.getTimeEntries(start, now),
+        await syncedService.getTimeEntries(start, now), //TODO chytat vyjimku pri spatnem dotazu a nastavit result jako "Failed"
       );
 
       serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
@@ -388,8 +388,7 @@ export class TimeEntriesSyncJob extends SyncJob {
     return true;
   }
 
-  private async updateJobLog(errors: Timer2TicketError[])
-  {
+  private async updateJobLog(errors: Timer2TicketError[]) {
     this._jobLog.errors.concat(errors)
     const updated = await databaseService.updateJobLog(this._jobLog);
     if (updated instanceof JobLog) {

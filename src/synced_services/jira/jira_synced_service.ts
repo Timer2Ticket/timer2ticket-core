@@ -303,7 +303,7 @@ export class jiraSyncedService implements SyncedService {
                 "version": 1
             },
             "started": modifiedStart,
-            "timeSpentSeconds": (durationInMilliseconds / 1000)
+            "timeSpentSeconds": (Math.floor(durationInMilliseconds / 1000))
         }
         let response
         try {
