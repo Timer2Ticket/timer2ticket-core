@@ -156,29 +156,37 @@ export class TogglTrackSyncedService implements SyncedService {
   // ***********************************************************
 
   private async _getAllProjects(): Promise<ServiceObject[] | boolean> {
-    let response;
-    try {
-      response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._projectsUri)
-              .auth(this._serviceDefinition.apiKey, 'api_token')
-      );
-    } catch (ex: any) {
-      this.handleResponseException(ex, 'getAllProjects');
-      return false;
-    }
-
-
     const projects: ServiceObject[] = [];
+    let response;
 
-    response.body?.forEach((project: never) => {
-      projects.push(
-        new ServiceObject(
-          project['id'],
-          project['name'],
-          this._projectsType,
-        ));
-    });
+    const queryParams = {
+      page: 1,
+      per_page: 200,
+    };
+
+    do {
+      try {
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._projectsUri)
+                .auth(this._serviceDefinition.apiKey, 'api_token')
+                .query(queryParams)
+        );
+      } catch (ex: any) {
+        this.handleResponseException(ex, 'getAllProjects');
+        return false;
+      }
+
+      response.body?.forEach((project: never) => {
+        projects.push(
+            new ServiceObject(
+                project['id'],
+                project['name'],
+                this._projectsType,
+            ));
+      });
+      queryParams.page += 1;
+    } while (response.body?.length > 0)
 
     return projects;
   }
