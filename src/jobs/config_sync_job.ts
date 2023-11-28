@@ -333,12 +333,6 @@ export class ConfigSyncJob extends SyncJob {
       if (ex.status !== 400) {
         throw ex;
       }
-      // For debugging purposes catching all errors here.
-      let context = [
-        this._sentryService.createExtraContext("Status_code", ex.status),
-        this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
-      ]
-      this._sentryService.logError(ex, context);
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
       // => try to find it and use it for the mapping
       const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));
