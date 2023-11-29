@@ -114,7 +114,6 @@ export class jiraSyncedService implements SyncedService {
         let received = 0
         while (total > received) {
             const query = this._generateTimeEntriesQuery(projectIdOrKey, start, end)
-            console.log(query)
             let response
             try {
                 response = await superagent
@@ -475,9 +474,7 @@ export class jiraSyncedService implements SyncedService {
         let received = 0
         const issues: any = []
         while (total > received) {
-            console.log(total, received)
             const query = this._generateSummarySearchQuery(projectId, this._fallbackIssueName)
-            console.log(query)
             let response
             try {
                 response = await superagent
