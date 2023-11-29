@@ -18,6 +18,9 @@ export class jiraSyncedService implements SyncedService {
     private _apiKey: string
     private _userEmail: string
     private _secret: string
+    private _hasFallbackIssue: boolean
+    private _fallbackIssueName: string | null
+
 
     private _issueUri: string
     private _projectUri: string
@@ -26,6 +29,7 @@ export class jiraSyncedService implements SyncedService {
     private _issuesType: string
     private _maxResultsPerSearch: number
     private _serviceName: string
+
 
 
     errors: Array<Timer2TicketError>;
@@ -38,10 +42,13 @@ export class jiraSyncedService implements SyncedService {
         this._userEmail = syncedServiceDefinition.config.userEmail!
         this._serviceName = syncedServiceDefinition.name
         this._secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
+        this._hasFallbackIssue = syncedServiceDefinition.config.fallbackIssue!
+        this._hasFallbackIssue ? this._fallbackIssueName = syncedServiceDefinition.config.fallbackIssueName! : this._fallbackIssueName = null
+
 
         this._issueUri = `${this._domain}rest/api/3/issue/`
         this._projectUri = `${this._domain}rest/api/3/project/`
-        this._searchUri = `${this._domain}rest/api/3/search/`
+        this._searchUri = `${this._domain}rest/api/3/search`
         this._projectsType = 'project'
         this._issuesType = 'issue'
         this._maxResultsPerSearch = 50
@@ -265,19 +272,21 @@ export class jiraSyncedService implements SyncedService {
      * @param additionalData 
      */
     async createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null> {
+        console.log('about to create Time Entry')
         let projectId
-        let issueId //issue Id would be enough if project id was not aprt of Time Entry object
+        let issueId
         for (const data of additionalData) {
             if (data.type === this._projectsType) {
-                projectId = data.id
+                projectId = data.id!
             } else if (data.type === this._issuesType) {
-                issueId = data.id
+                issueId = data.id!
             }
         }
-        if (!issueId || !projectId) {
-            //both are required (project ID needed for internal T2T save)
+        if ((!issueId && !projectId)) {
+            //at least one is needed to succesfully create TE in Jira
             return null
         }
+
         //date format in iso string was not working. expts ending with +000 instead of Z
         let modifiedStart = start.toISOString()
         modifiedStart = modifiedStart.slice(0, modifiedStart.length - 1)
@@ -302,7 +311,17 @@ export class jiraSyncedService implements SyncedService {
             "started": modifiedStart,
             "timeSpentSeconds": (Math.floor(durationInMilliseconds / 1000))
         }
+
+        console.log(this._hasFallbackIssue, this._fallbackIssueName)
         let response
+        if (!issueId && projectId) {
+            //log to falllback = change ID of issue to log to
+            if (!this._hasFallbackIssue) {
+                //user congifured they do not want to sync such TEs
+                return null
+            }
+            issueId = await this._getIdOfFallbackIssue(projectId)
+        }
         try {
             response = await superagent
                 .post(`${this._issueUri}/${issueId}/worklog`)
@@ -313,18 +332,18 @@ export class jiraSyncedService implements SyncedService {
             this.handleResponseException(ex, `create new TE in Jira`, `${this._issueUri}/${issueId}/worklog`)
             return null
         }
-
         const teStart = new Date(response.body.started)
 
         const newTimeEntry = new JiraTimeEntry(
-            this._createTimeEntryId(issueId, response.body.id),
-            projectId,
+            this._createTimeEntryId(response.body.issueId, response.body.id),
+            projectId ? projectId : '',
             response.body.comment.content[0].content[0].text,
             teStart,
             this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
             durationInMilliseconds,
             new Date(response.body.updated))
         return newTimeEntry
+
     }
 
     /**
@@ -439,6 +458,67 @@ export class jiraSyncedService implements SyncedService {
     private _calculateEndfromStartAndDuration(start: Date, durationInMilliseconds: number): Date {
         return new Date(start.getTime() + durationInMilliseconds)
     }
+
+    private async _getIdOfFallbackIssue(projectId: string | number): Promise<number | string | null> {
+        //TODO check multiple pages
+        console.log('about to get fallback issue id')
+        if (!this._fallbackIssueName)
+            return null
+        let response
+        const query = `summary~"${this._fallbackIssueName}"`
+        try {
+            response = await superagent
+                .get(`${this._searchUri}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .query({ 'jql': query })
+                .accept('application/json')
+        } catch (ex: any) {
+            console.log('error fetching fallback issue')
+            //this.handleResponseException(ex, `Error finding fallback task of project id: ${projectId}`, `${this._searchUri}?${query}`)
+            return null
+        }
+        const issues = response.body.issues
+
+        //query dos not look for equality, but if it contains
+        //now i check for equality, if more of them are named the same, return the first one
+        let issue = issues.find((i: any) => {
+            return i.fields.summary === this._fallbackIssueName
+        })
+        if (!issue) {
+            //issue was not created yet
+            const issueId = await this._createJiraIssue(projectId, this._fallbackIssueName)
+            return issueId
+        }
+        return issue.id
+    }
+
+    private async _createJiraIssue(projectId: number | string, summary: string): Promise<number | string | null> {
+        console.log('about to create new isseu')
+        const data = {
+            "fields": {
+                "project": {
+                    "id": projectId
+                },
+                "issuetype": {
+                    "name": "Task"
+                },
+                "summary": summary
+            }
+        }
+        let response
+        try {
+            response = await superagent
+                .post(`${this._issueUri}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .accept('application/json')
+                .send(data)
+        } catch (ex: any) {
+            this.handleResponseException(ex, `creating new Issue in Jira`, `${this._projectUri} `)
+            return null
+        }
+        return response.body.id
+    }
+
 
     handleResponseException(ex: any, functionInfo: string, uri: string): void {
         const status = ex.status
