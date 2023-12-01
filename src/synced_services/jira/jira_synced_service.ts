@@ -107,7 +107,7 @@ export class jiraSyncedService implements SyncedService {
 
 
 
-    /*private*/ async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
+    private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
 
         let total = 1
@@ -378,7 +378,7 @@ export class jiraSyncedService implements SyncedService {
     }
 
     /**
-     * Extracts objects from specific timeEntry other than Jira
+     * Extracts config objects from specific timeEntry other than Jira
      * @param timeEntry timeEntry object from which mappingsObjects are extracting - each specific manager has its specific time entry instance (e.g. TogglTimeEntry)
      * @param mappings user's mappings where to find mappingsObjects (by id)
      */
@@ -388,12 +388,13 @@ export class jiraSyncedService implements SyncedService {
             return []
         const results: MappingsObject[] = []
         for (const mapping of mappings) {
-            const obj = mapping.mappingsObjects.find(o => o.service === this._serviceName)
-            if (obj) {
-                if ((obj.id === timeEntry.projectId && obj.type === this._projectsType)
-                    || (obj.id === this._issueIdFromTimeEntryId(timeEntry.id) && obj.type === this._issuesType)
+            const jiraObj = mapping.mappingsObjects.find(o => o.service === this._serviceName)
+            if (jiraObj) {
+                const issueId = this._issueIdFromTimeEntryId(timeEntry.id)
+                if ((jiraObj.id === timeEntry.projectId && jiraObj.type === this._projectsType)
+                    || (issueId !== -1 && jiraObj.id === issueId && jiraObj.type === this._issuesType)
                 ) {
-                    const notJiraMappings = mapping.mappingsObjects.filter(o => o.name !== this._serviceName)
+                    const notJiraMappings = mapping.mappingsObjects.filter(o => o.service !== this._serviceName)
                     //push other than Jira
                     results.push(...notJiraMappings)
                 }
@@ -405,9 +406,13 @@ export class jiraSyncedService implements SyncedService {
     async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
         //TODO test
         if (mapping.primaryObjectType !== this._issuesType) {
+            //there are only issue related TEs in Jira
             return null
         }
+
+        //it is not realy needed for Jira, for redmine it is necessary to get userId
         const jiraServiceDefinition = Connection.findServiceDefinitionByName(this._serviceName, connection)
+        //check if the connection exists
         if (jiraServiceDefinition === undefined) {
             return null
         }
@@ -435,7 +440,7 @@ export class jiraSyncedService implements SyncedService {
             const timeEntry = new JiraTimeEntry(
                 this._createTimeEntryId(issueId, worklog.id),
                 issue.fields.project.id,
-                worklog.comment.content[0].content[0].text,
+                worklog.comment.content[0].content[0].text ? worklog.comment.content[0].content[0].text : '',
                 start,
                 this._calculateEndfromStartAndDuration(start, durationInMiliseconds),
                 durationInMiliseconds,
