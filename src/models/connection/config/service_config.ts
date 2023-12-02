@@ -1,4 +1,5 @@
 import { DefaultTimeEntryActivity } from './default_time_entry_activity';
+import { FallbackIssue } from './fallback_issue';
 import { Workspace } from './workspace';
 
 export class ServiceConfig {
@@ -20,7 +21,5 @@ export class ServiceConfig {
   // For Jira
   domain!: string | null
   //for Jira
-  fallbackIssue!: boolean | null
-  //for Jira
-  fallbackIssueName!: string | null
+  fallbackIssue!: FallbackIssue | null
 }

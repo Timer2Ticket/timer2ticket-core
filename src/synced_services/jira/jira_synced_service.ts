@@ -42,8 +42,10 @@ export class jiraSyncedService implements SyncedService {
         this._userEmail = syncedServiceDefinition.config.userEmail!
         this._serviceName = syncedServiceDefinition.name
         this._secret = Buffer.from(`${this._userEmail}:${this._apiKey}`).toString("base64")
-        this._hasFallbackIssue = syncedServiceDefinition.config.fallbackIssue!
-        this._hasFallbackIssue ? this._fallbackIssueName = syncedServiceDefinition.config.fallbackIssueName! : this._fallbackIssueName = null
+        this._hasFallbackIssue = syncedServiceDefinition.config.fallbackIssue!.fallbackIssue
+        this._hasFallbackIssue ?
+            this._fallbackIssueName = syncedServiceDefinition.config.fallbackIssue!.name
+            : this._fallbackIssueName = null
 
 
         this._issueUri = `${this._domain}rest/api/3/issue/`
@@ -498,14 +500,14 @@ export class jiraSyncedService implements SyncedService {
             })
         }
         //query dos not look for equality, but if it contains
-        //now i check for equality, if more of them are named the same, return the first one
+        //now check for equality in summary, if more of them are named the same, return the first one
         let issue = issues.find((i: any) => {
             return i.fields.summary === this._fallbackIssueName
         })
         if (!issue) {
             //issue was not created yet
-            //const issueId = await this._createJiraIssue(projectId, this._fallbackIssueName)
-            return 1//issueId
+            const issueId = await this._createJiraIssue(projectId, this._fallbackIssueName)
+            return issueId
         }
         return issue.id
     }
