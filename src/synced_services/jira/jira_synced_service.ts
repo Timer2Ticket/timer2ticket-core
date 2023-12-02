@@ -1,3 +1,4 @@
+import { IssueType } from "../../models/connection/config/issue_type";
 import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
 import { Connection } from "../../models/connection/connection";
 import { Mapping } from "../../models/connection/mapping/mapping";
@@ -20,6 +21,7 @@ export class jiraSyncedService implements SyncedService {
     private _secret: string
     private _hasFallbackIssue: boolean
     private _fallbackIssueName: string | null
+    private _ignoreIssueTypes: IssueType[]
 
 
     private _issueUri: string
@@ -46,7 +48,7 @@ export class jiraSyncedService implements SyncedService {
         this._hasFallbackIssue ?
             this._fallbackIssueName = syncedServiceDefinition.config.fallbackIssue!.name
             : this._fallbackIssueName = null
-
+        this._ignoreIssueTypes = syncedServiceDefinition.config.ignoredIssueTypes
 
         this._issueUri = `${this._domain}rest/api/3/issue/`
         this._projectUri = `${this._domain}rest/api/3/project/`
