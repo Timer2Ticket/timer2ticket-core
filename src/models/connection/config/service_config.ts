@@ -1,7 +1,7 @@
 import { DefaultTimeEntryActivity } from './default_time_entry_activity';
 import { FallbackIssue } from './fallback_issue';
 import { Workspace } from './workspace';
-import { IssueType } from './issue_type';
+import { IssueState } from './issue_state';
 
 export class ServiceConfig {
   /**
@@ -25,5 +25,5 @@ export class ServiceConfig {
   fallbackIssue!: FallbackIssue | null
 
   //for Jira, later Redmine
-  ignoredIssueTypes!: IssueType[] // can be empty
+  ignoredIssueStates!: IssueState[] // can be empty
 }

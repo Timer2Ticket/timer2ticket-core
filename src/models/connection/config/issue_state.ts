@@ -1,4 +1,4 @@
-export class IssueType {
+export class IssueState {
     id!: string
     name!: string
 }
