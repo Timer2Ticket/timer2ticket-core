@@ -8,9 +8,9 @@ import { Utilities } from "../shared/utilities";
 import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
-import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
-import {Connection} from "../models/connection/connection";
-import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
+import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import { Connection } from "../models/connection/connection";
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -58,10 +58,10 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     const secondaryServiceWrapper = new SyncedServiceWrapper(
-        secondaryServiceDefinition,
-        syncedService,
-        allServiceObjects,
-      );
+      secondaryServiceDefinition,
+      syncedService,
+      allServiceObjects,
+    );
 
     // Check primary objects and mappings, if something is wrong, fix it
     // Scenarios (based on objects from primary service):
@@ -123,6 +123,18 @@ export class ConfigSyncJob extends SyncJob {
 
     // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
     for (const mapping of this._connection.mappings) {
+      // // delete object from secondary service because it was deleted in the primary - not working because of too many requests on Toggl
+      // const primaryObjectExists = objectsToSync.find((obj: ServiceObject) => {
+      //   obj.id === mapping.primaryObjectId
+      // })
+      // if (!primaryObjectExists) {
+      //   //delete secondary object in the service
+      //   const secondaryServiceObject = mapping.mappingsObjects[0].service === "Toggl Track" ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+      //   //console.log(`about to delete obj from ${secondaryServiceObject.service} with Id ${secondaryServiceObject.id} and name ${secondaryServiceObject.name}`)
+      //   syncedService.deleteServiceObject(secondaryServiceObject.id, 'tag')   
+      //  //add obsolete mapping so it could be deleted
+      // }
+
       const isObsolete = checkedMappings.find(checkedMapping => checkedMapping === mapping) === undefined;
       if (isObsolete && mapping.markedToDelete) {
         // check if days passed from when it was markedToDelete
@@ -252,7 +264,7 @@ export class ConfigSyncJob extends SyncJob {
     if (serviceWrapper) {
       // firstly create object in the service, then create serviceObject with newly acquired id
       const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
-      const secondaryMappingsObject =new MappingsObject(newObject.id, newObject.name, secondaryServiceDefinition.name, newObject.type);
+      const secondaryMappingsObject = new MappingsObject(newObject.id, newObject.name, secondaryServiceDefinition.name, newObject.type);
       mapping.mappingsObjects.push(secondaryMappingsObject);
     }
 
@@ -272,7 +284,7 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     const secondaryServiceDefinition = Connection.getSecondaryServiceDefinition(this._connection);
-    if(!serviceWrapper) {
+    if (!serviceWrapper) {
       return true;
     }
     const mappingsObject = mapping.mappingsObjects.find(mappingObject => mappingObject.service === secondaryServiceDefinition.name);
@@ -289,7 +301,7 @@ export class ConfigSyncJob extends SyncJob {
       // scenario b), d), f)
       // check if mapping corresponds with real object in the service
       const objectBasedOnMapping = await serviceWrapper.allServiceObjects
-          .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
+        .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
 
       if (!objectBasedOnMapping) {
         // scenario f), create new object in the service
@@ -301,7 +313,7 @@ export class ConfigSyncJob extends SyncJob {
         // scenario b)
         // name is incorrect => maybe mapping was outdated or/and real object was outdated
         const updatedObject = await serviceWrapper.syncedService.updateServiceObject(
-            mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
+          mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
         );
         // console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
         mappingsObject.name = updatedObject.name;
@@ -326,7 +338,7 @@ export class ConfigSyncJob extends SyncJob {
       // For debugging purposes catching all errors here.
       const context = [
         this._sentryService.createExtraContext("Status_code", ex.status),
-        this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
+        this._sentryService.createExtraContext('Object_to_sync', { 'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type })
       ]
       this._sentryService.logError(ex, context);
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
@@ -335,7 +347,7 @@ export class ConfigSyncJob extends SyncJob {
       newObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
       if (!newObject) {
         const context = [
-          this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
+          this._sentryService.createExtraContext('Object_to_sync', { 'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type })
         ]
         this._sentryService.logError(ex, context);
         throw ex;
@@ -365,7 +377,7 @@ export class ConfigSyncJob extends SyncJob {
           operationOk = true;
         } else {
           const context = [
-            this._sentryService.createExtraContext('Mapping to delete', {'id': mappingObject.id, 'type': mappingObject.type})
+            this._sentryService.createExtraContext('Mapping to delete', { 'id': mappingObject.id, 'type': mappingObject.type })
           ]
           this._sentryService.logError(ex);
           // console.error('err: ConfigSyncJob: delete; exception');

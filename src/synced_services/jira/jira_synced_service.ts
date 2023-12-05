@@ -21,7 +21,7 @@ export class jiraSyncedService implements SyncedService {
     private _secret: string
     private _hasFallbackIssue: boolean
     private _fallbackIssueName: string | null
-    private _ignoreIssueTypes: IssueState[]
+    private _ignoreIssueStates: IssueState[]
 
 
     private _issueUri: string
@@ -48,7 +48,7 @@ export class jiraSyncedService implements SyncedService {
         this._hasFallbackIssue ?
             this._fallbackIssueName = syncedServiceDefinition.config.fallbackIssue!.name
             : this._fallbackIssueName = null
-        this._ignoreIssueTypes = syncedServiceDefinition.config.ignoredIssueStates
+        this._ignoreIssueStates = syncedServiceDefinition.config.ignoredIssueStates
 
         this._issueUri = `${this._domain}rest/api/3/issue`
         this._projectUri = `${this._domain}rest/api/3/project`
@@ -63,7 +63,7 @@ export class jiraSyncedService implements SyncedService {
     }
 
     /**
-   * Get all service objects which: projects, issues, activities etc.
+   * Get all service objects which: projects, issues (with the right state), activities etc.
    * returns false in case of any error
    */
     async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
@@ -117,7 +117,7 @@ export class jiraSyncedService implements SyncedService {
         let total = 1
         let received = 0
         while (total > received) {
-            const query = this._generateTimeEntriesQuery(projectIdOrKey, start, end)
+            const query = this._generateQueryForGettingAllIssues(projectIdOrKey, start, end)
             let response
             try {
                 response = await superagent
@@ -126,7 +126,7 @@ export class jiraSyncedService implements SyncedService {
                     .query({ jql: query, startAt: received })
                     .accept('application/json')
             } catch (ex: any) {
-                this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, this._issueUri)
+                this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, `${this._searchUri}?${query}`)
                 return []
             }
             total = response.body.total
@@ -139,13 +139,16 @@ export class jiraSyncedService implements SyncedService {
         return issues
     }
 
-    private _generateTimeEntriesQuery(projectIdOrKey: string | number, start?: Date, end?: Date): string {
+    private _generateQueryForGettingAllIssues(projectIdOrKey: string | number, start?: Date, end?: Date): string {
         let query = `project=${projectIdOrKey}`
         if (start) {
             query += ` AND worklogDate>="${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()}"`
             if (end) {
                 query += `AND worklogDate<="${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}"`
             }
+        }
+        for (const ignoredState of this._ignoreIssueStates) {
+            query += ` AND status != ${ignoredState.id}`
         }
         return query
     }
