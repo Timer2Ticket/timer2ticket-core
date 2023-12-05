@@ -50,8 +50,8 @@ export class jiraSyncedService implements SyncedService {
             : this._fallbackIssueName = null
         this._ignoreIssueTypes = syncedServiceDefinition.config.ignoredIssueStates
 
-        this._issueUri = `${this._domain}rest/api/3/issue/`
-        this._projectUri = `${this._domain}rest/api/3/project/`
+        this._issueUri = `${this._domain}rest/api/3/issue`
+        this._projectUri = `${this._domain}rest/api/3/project`
         this._searchUri = `${this._domain}rest/api/3/search`
         this._projectsType = 'project'
         this._issuesType = 'issue'
@@ -248,7 +248,7 @@ export class jiraSyncedService implements SyncedService {
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
         } catch (ex: any) {
-            this.handleResponseException(ex, `gettnig TE with id ${id}`, `${this._issueUri} / ${issueId}`)
+            this.handleResponseException(ex, `gettnig TE with id ${id}`, `${this._issueUri}/${issueId}`)
             return null
         }
         if (!response || !response.ok || response.body.fields.worklog.total === 0) {
