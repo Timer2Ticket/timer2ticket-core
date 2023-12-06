@@ -206,7 +206,6 @@ export class jiraSyncedService implements SyncedService {
         for (const project of projects) {
             const issues = await this._getIssuesOfProject(project.id, false, start, end)
             for (const issue of issues) {
-                console.log(`issue ${issue.name}`)
                 let response
                 try {
                     response = await superagent
@@ -389,7 +388,6 @@ export class jiraSyncedService implements SyncedService {
      * @param mappings user's mappings where to find mappingsObjects (by id)
      */
     extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
-        //return only one TE, because in jira time entries are trnasformed to different worklogs
         if (!(timeEntry instanceof JiraTimeEntry))
             return []
         const results: MappingsObject[] = []
@@ -397,8 +395,8 @@ export class jiraSyncedService implements SyncedService {
             const jiraObj = mapping.mappingsObjects.find(o => o.service === this._serviceName)
             if (jiraObj) {
                 const issueId = this._issueIdFromTimeEntryId(timeEntry.id)
-                if ((jiraObj.id === timeEntry.projectId && jiraObj.type === this._projectsType)
-                    || (issueId !== -1 && jiraObj.id === issueId && jiraObj.type === this._issuesType)
+                if ((jiraObj.id == timeEntry.projectId && jiraObj.type === this._projectsType)
+                    || (issueId !== -1 && jiraObj.id == issueId && jiraObj.type === this._issuesType)
                 ) {
                     const notJiraMappings = mapping.mappingsObjects.filter(o => o.service !== this._serviceName)
                     //push other than Jira
@@ -412,7 +410,7 @@ export class jiraSyncedService implements SyncedService {
     async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
         if (mapping.primaryObjectType !== this._issuesType) {
             //there are only issue related TEs in Jira (even the one to project is logged to specific issue)
-            return null
+            return []
         }
 
         //it is not realy needed for Jira, for redmine it is necessary to get userId
