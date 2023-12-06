@@ -103,7 +103,7 @@ export class jiraSyncedService implements SyncedService {
     private async _getIssues(projects: ServiceObject[]): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
         for (const project of projects) {
-            const issuesOfProject = await this._getIssuesOfProject(project.id)
+            const issuesOfProject = await this._getIssuesOfProject(project.id, true)
             issues.push(...issuesOfProject)
         }
         return issues
@@ -111,13 +111,13 @@ export class jiraSyncedService implements SyncedService {
 
 
 
-    private async _getIssuesOfProject(projectIdOrKey: string | number, start?: Date, end?: Date): Promise<ServiceObject[]> {
+    private async _getIssuesOfProject(projectIdOrKey: string | number, selectByState: boolean, start?: Date, end?: Date): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
 
         let total = 1
         let received = 0
         while (total > received) {
-            const query = this._generateQueryForGettingAllIssues(projectIdOrKey, start, end)
+            const query = this._generateQueryForGettingAllIssues(projectIdOrKey, selectByState, start, end)
             let response
             try {
                 response = await superagent
@@ -139,7 +139,7 @@ export class jiraSyncedService implements SyncedService {
         return issues
     }
 
-    private _generateQueryForGettingAllIssues(projectIdOrKey: string | number, start?: Date, end?: Date): string {
+    private _generateQueryForGettingAllIssues(projectIdOrKey: string | number, selectByState: boolean, start?: Date, end?: Date): string {
         let query = `project=${projectIdOrKey}`
         if (start) {
             query += ` AND worklogDate>="${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()}"`
@@ -147,8 +147,10 @@ export class jiraSyncedService implements SyncedService {
                 query += `AND worklogDate<="${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}"`
             }
         }
-        for (const ignoredState of this._ignoreIssueStates) {
-            query += ` AND status != ${ignoredState.id}`
+        if (selectByState) {
+            for (const ignoredState of this._ignoreIssueStates) {
+                query += ` AND status != ${ignoredState.id}`
+            }
         }
         return query
     }
@@ -202,8 +204,9 @@ export class jiraSyncedService implements SyncedService {
 
         const projects = await this._getAllProjects()
         for (const project of projects) {
-            const issues = await this._getIssuesOfProject(project.id, start, end)
+            const issues = await this._getIssuesOfProject(project.id, false, start, end)
             for (const issue of issues) {
+                console.log(`issue ${issue.name}`)
                 let response
                 try {
                     response = await superagent
@@ -219,13 +222,11 @@ export class jiraSyncedService implements SyncedService {
                     worklogs.forEach((worklog: any) => {
                         const durationInMilliseconds = worklog.timeSpentSeconds * 1000
                         const teStart = new Date(worklog.started)
-                        const text = worklog.comment && worklog.comment.content[0].content[0].text ?
-                            worklog.comment.content[0].content[0].text : ''
 
                         timeEntries.push(new JiraTimeEntry(
                             this._createTimeEntryId(issue.id, worklog.id),
                             project.id,
-                            text,
+                            this._getcommentOfWorklog(worklog),
                             teStart,
                             this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
                             durationInMilliseconds,
@@ -266,12 +267,11 @@ export class jiraSyncedService implements SyncedService {
 
         const durationInMilliseconds = myWorklog.timeSpentSeconds * 1000
         const teStart = new Date(myWorklog.started)
-        const text = myWorklog.comment && myWorklog.comment.content[0].content[0].text ?
-            myWorklog.comment.content[0].content[0].text : ''
+
         return new JiraTimeEntry(
             id,
             response.body.fields.project.id,
-            text,
+            this._getcommentOfWorklog(myWorklog),
             teStart,
             this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
             durationInMilliseconds,
@@ -380,17 +380,16 @@ export class jiraSyncedService implements SyncedService {
         }
         if (response.status !== 204)
             return false
-
         return true
     }
 
     /**
      * Extracts config objects from specific timeEntry other than Jira
-     * @param timeEntry timeEntry object from which mappingsObjects are extracting - each specific manager has its specific time entry instance (e.g. TogglTimeEntry)
+     * @param timeEntry timeEntry object from which mappingsObjects are extracting - each specific manager has its specific time entry instance (e.g. JiraTimeEntry)
      * @param mappings user's mappings where to find mappingsObjects (by id)
      */
     extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[] {
-        //TODO test
+        //return only one TE, because in jira time entries are trnasformed to different worklogs
         if (!(timeEntry instanceof JiraTimeEntry))
             return []
         const results: MappingsObject[] = []
@@ -411,9 +410,8 @@ export class jiraSyncedService implements SyncedService {
     }
 
     async getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null> {
-        //TODO test
         if (mapping.primaryObjectType !== this._issuesType) {
-            //there are only issue related TEs in Jira
+            //there are only issue related TEs in Jira (even the one to project is logged to specific issue)
             return null
         }
 
@@ -443,11 +441,11 @@ export class jiraSyncedService implements SyncedService {
         const issue = response.body
         for (const worklog of issue.fields.worklog.worklogs) {
             const start = new Date(worklog.started)
-            const durationInMiliseconds = worklog.timeSpentSeconds
+            const durationInMiliseconds = worklog.timeSpentSeconds * 1000
             const timeEntry = new JiraTimeEntry(
                 this._createTimeEntryId(issueId, worklog.id),
                 issue.fields.project.id,
-                worklog.comment.content[0].content[0].text ? worklog.comment.content[0].content[0].text : '',
+                this._getcommentOfWorklog(worklog),
                 start,
                 this._calculateEndfromStartAndDuration(start, durationInMiliseconds),
                 durationInMiliseconds,
@@ -456,6 +454,14 @@ export class jiraSyncedService implements SyncedService {
             timeEntries.push(timeEntry)
         }
         return timeEntries
+    }
+
+    private _getcommentOfWorklog(worklog: any): string {
+        if (worklog.comment && worklog.comment.content[0] && worklog.comment.content[0].content[0] && worklog.comment.content[0].content[0].text) {
+            return worklog.comment.content[0].content[0].text
+        } else {
+            return ''
+        }
     }
 
     private _createTimeEntryId(issueId: number | string, worklogId: number | string): string {

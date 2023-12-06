@@ -5,7 +5,7 @@
   "main": "dist/app.js",
   "scripts": {
     "start": "tsc --project . && nodemon ./dist/app.js",
-    "test": "tsc --project . && node ./dist/test.js",
+    "test": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon ./dist/test.js\"",
     "start-fast": "npm run build && node ./dist/app.js",
     "build": "tsc --build"
   },
