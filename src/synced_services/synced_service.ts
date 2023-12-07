@@ -12,6 +12,12 @@ export interface SyncedService {
   errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null
+  //This controls if service allows backward tag assignment as source or target.
+  // This means that for now if a TE comes from Toggl it is allowed to sync even without mappings. But it can only sync to
+  // RM. So toggl is the source, RM is the target
+  readonly supportsBackwardTagAssignmentAsSource: boolean
+  readonly supportsBackwardTagAssignmentAsTarget: boolean
 
   /**
    * Get all service objects which: projects, issues, activities etc.
@@ -21,7 +27,7 @@ export interface SyncedService {
 
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one
-   * 
+   *
    * Typically created with name '[objectName] ([objectType])' or '#[objectId] [objectName] ([objectType])'
    * @param objectId id of serviceObject in the primary service => needed to generate name with that id
    * @param objectName name of serviceObject
@@ -42,7 +48,7 @@ export interface SyncedService {
 
   /**
    * Generates full name for given service object (Toggl, for example, generates names for tags as 'name (type)' or if issue, then '#id name (type)')
-   * @param serviceObject 
+   * @param serviceObject
    */
   getFullNameForServiceObject(serviceObject: ServiceObject): string;
 
@@ -58,11 +64,11 @@ export interface SyncedService {
 
   /**
    * Create a new time entry real object in the service, returns specific TimeEntry
-   * @param durationInMilliseconds 
-   * @param start 
-   * @param end 
-   * @param text 
-   * @param additionalData 
+   * @param durationInMilliseconds
+   * @param start
+   * @param end
+   * @param text
+   * @param additionalData
    */
   createTimeEntry(durationInMilliseconds: number, start: Date, end: Date, text: string, additionalData: ServiceObject[]): Promise<TimeEntry | null>;
 
