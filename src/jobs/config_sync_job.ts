@@ -330,7 +330,7 @@ export class ConfigSyncJob extends SyncJob {
     try {
       newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
     } catch (ex: any) {
-      if (ex.status !== 400) {
+      if (ex.statusCode !== 400) {
         throw ex;
       }
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
