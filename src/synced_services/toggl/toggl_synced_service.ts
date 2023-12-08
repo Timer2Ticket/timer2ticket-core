@@ -31,6 +31,10 @@ export class TogglTrackSyncedService implements SyncedService {
   public errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null;
+
+  readonly supportsBackwardTagAssignmentAsSource = true;
+  readonly supportsBackwardTagAssignmentAsTarget = false;
 
   constructor(serviceDefinition: ServiceDefinition) {
     this._serviceDefinition = serviceDefinition;
@@ -54,6 +58,9 @@ export class TogglTrackSyncedService implements SyncedService {
 
     this._sentryService = new SentryService();
     this._errorService = new ErrorService();
+
+    //not used in this synced service
+    this._user = null;
   }
 
   /**
@@ -77,7 +84,7 @@ export class TogglTrackSyncedService implements SyncedService {
     // call request but with chained retry
     const response = await request
       .retry(2, (err, res) => {
-        if (res.status === 429) {
+        if (res.statusCode === 429) {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
         }
@@ -157,29 +164,37 @@ export class TogglTrackSyncedService implements SyncedService {
   // ***********************************************************
 
   private async _getAllProjects(): Promise<ServiceObject[] | boolean> {
-    let response;
-    try {
-      response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._projectsUri)
-              .auth(this._serviceDefinition.apiKey, 'api_token')
-      );
-    } catch (ex: any) {
-      this.handleResponseException(ex, 'getAllProjects');
-      return false;
-    }
-
-
     const projects: ServiceObject[] = [];
+    let response;
 
-    response.body?.forEach((project: never) => {
-      projects.push(
-        new ServiceObject(
-          project['id'],
-          project['name'],
-          this._projectsType,
-        ));
-    });
+    const queryParams = {
+      page: 1,
+      per_page: 200,
+    };
+
+    do {
+      try {
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._projectsUri)
+                .auth(this._serviceDefinition.apiKey, 'api_token')
+                .query(queryParams)
+        );
+      } catch (ex: any) {
+        this.handleResponseException(ex, 'getAllProjects');
+        return false;
+      }
+
+      response.body?.forEach((project: never) => {
+        projects.push(
+            new ServiceObject(
+                project['id'],
+                project['name'],
+                this._projectsType,
+            ));
+      });
+      queryParams.page += 1;
+    } while (response.body?.length > 0)
 
     return projects;
   }

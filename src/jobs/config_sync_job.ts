@@ -11,7 +11,6 @@ import { SyncedServiceCreator } from "../synced_services/synced_service_creator"
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 
-
 export class ConfigSyncJob extends SyncJob {
   /**
    * This job takes mappings from the user and checks if there are any problems with them
@@ -106,7 +105,8 @@ export class ConfigSyncJob extends SyncJob {
           mapping = await this._createMapping(objectToSync, secondaryServicesWrappersMap);
         } else {
           // scenario b), d), e), f)
-          operationsOk &&= await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          const result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          operationsOk &&= result;
         }
 
         // push to checkedMappings
@@ -155,7 +155,8 @@ export class ConfigSyncJob extends SyncJob {
           // add user error
           // console.log(message);
           // // Sentry.captureMessage(message);
-          operationsOk &&= await this._deleteMapping(mapping);
+          const result = await this._deleteMapping(mapping);
+          operationsOk = operationsOk && result;
           continue;
         }
         //there is no explicit link between TESO and Mappings in the T2T DB
@@ -345,15 +346,9 @@ export class ConfigSyncJob extends SyncJob {
     try {
       newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
     } catch (ex: any) {
-      if (ex.status !== 400) {
+      if (ex.statusCode !== 400) {
         throw ex;
       }
-      // For debugging purposes catching all errors here.
-      let context = [
-        this._sentryService.createExtraContext("Status_code", ex.status),
-        this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
-      ]
-      this._sentryService.logError(ex, context);
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
       // => try to find it and use it for the mapping
       const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));

@@ -13,6 +13,12 @@ export interface SyncedService {
   errors: Array<Timer2TicketError>;
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null
+  //This controls if service allows backward tag assignment as source or target.
+  // This means that for now if a TE comes from Toggl it is allowed to sync even without mappings. But it can only sync to
+  // RM. So toggl is the source, RM is the target
+  readonly supportsBackwardTagAssignmentAsSource: boolean
+  readonly supportsBackwardTagAssignmentAsTarget: boolean
 
   /**
    * Get all service objects which: projects, issues, activities etc.

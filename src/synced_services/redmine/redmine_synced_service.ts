@@ -32,9 +32,13 @@ export class RedmineSyncedService implements SyncedService {
 
   readonly _sentryService: SentryService
   readonly _errorService: ErrorService
+  readonly _user: User | null;
+
+  readonly supportsBackwardTagAssignmentAsSource = false;
+  readonly supportsBackwardTagAssignmentAsTarget = true;
 
   public errors: Array<Timer2TicketError>;
-  constructor(serviceDefinition: ServiceDefinition) {
+  constructor(serviceDefinition: ServiceDefinition, user: User | null) {
     if (serviceDefinition.config.apiPoint === null) {
       //TODO add sentry error
       throw 'Redmine ServiceDefinition apiPoint has to be defined.';
@@ -57,7 +61,11 @@ export class RedmineSyncedService implements SyncedService {
     this._errorService = new ErrorService();
 
     this.errors = [];
+
+    this._user = user;
   }
+
+
 
   /**
    * Can be awaited for @milliseconds
@@ -457,6 +465,7 @@ export class RedmineSyncedService implements SyncedService {
     let projectId;
     let issueId;
     let activityId;
+    let usedTextId = false;
 
     for (const data of additionalData) {
       if (data.type === this._projectsType) {
@@ -465,6 +474,16 @@ export class RedmineSyncedService implements SyncedService {
         issueId = data.id;
       } else if (data.type === this._timeEntryActivitiesType) {
         activityId = data.id;
+      }
+    }
+
+    if (text && typeof issueId === 'undefined') {
+      // checks if TE comment begins with task id
+      const regex = /^#(?<project_id>\d+)/;
+      const projectId = text.match(regex);
+      if (projectId && projectId.groups) {
+        issueId = projectId.groups.project_id;
+        usedTextId = true;
       }
     }
 
@@ -515,6 +534,20 @@ export class RedmineSyncedService implements SyncedService {
     const createdStart = new Date(response.body.time_entry['spent_on']);
     const createdEnd = new Date(new Date(response.body.time_entry['spent_on']).setMilliseconds(durationInMilliseconds));
     const createdDurationInMilliseconds = response.body.time_entry['hours'] * 60 * 60 * 1000;
+    const date = new Date(response.body.time_entry['updated_on']);
+    let lastUpdated;
+
+    // this is used to force T2T to update other services in next sync to add the issue ID to TE
+    if (usedTextId) {
+      lastUpdated = new Date(date.getTime());
+      lastUpdated.setDate(date.getDate() - 1);
+      // schedule config job to force update mappings to prepare mappings for sync from redmine
+      await superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
+    } else {
+      lastUpdated = date;
+    }
+
+
 
     return new RedmineTimeEntry(
       response.body.time_entry['id'],
@@ -525,7 +558,7 @@ export class RedmineSyncedService implements SyncedService {
       createdDurationInMilliseconds,
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
-      new Date(response.body.time_entry['updated_on']),
+      lastUpdated,
     );
   }
 

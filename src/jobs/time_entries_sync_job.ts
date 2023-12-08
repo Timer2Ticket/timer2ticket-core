@@ -175,9 +175,9 @@ export class TimeEntriesSyncJob extends SyncJob {
 
   /**
    * Creates TESO based on given TE in other services
-   * @param timeEntryOriginServiceWrapper 
-   * @param otherServiceTimeEntriesWrappers 
-   * @param timeEntry 
+   * @param timeEntryOriginServiceWrapper
+   * @param otherServiceTimeEntriesWrappers
+   * @param timeEntry
    * @returns updated TESO OR null if not meant to be synced OR undefined if error
    */
   private async _createTimeEntrySyncedObject(
@@ -194,12 +194,20 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     const otherServicesMappingsObjects = timeEntryOriginServiceWrapper.syncedService.extractMappingsObjectsFromTimeEntry(timeEntry, this._user.mappings);
 
-    if (otherServicesMappingsObjects.length === 0) {
+    //only allows TE from toggl to pass without mapping (toggl -> rm can get issue ID from description)
+    if (otherServicesMappingsObjects.length === 0 && !timeEntryOriginServiceWrapper.syncedService.supportsBackwardTagAssignmentAsSource) {
       // TE sync is not required (e.g. not project selected etc.)
       return null;
     }
 
     for (const otherServiceDefinition of otherServiceTimeEntriesWrappers) {
+
+      //if not syncing to RM then skip if mappings aren't present.
+      if (otherServicesMappingsObjects.length === 0 && !otherServiceDefinition.syncedService.supportsBackwardTagAssignmentAsTarget) {
+        // TE sync is not required (e.g. not project selected etc.)
+        continue;
+      }
+
       const createdTimeEntry = await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
         otherServicesMappingsObjects,
         otherServiceDefinition.serviceDefinition,
@@ -226,15 +234,15 @@ export class TimeEntriesSyncJob extends SyncJob {
 
   /**
    * Returns true if timeEntrySyncedObjectWrapper.TESO needs to be updated in the DB
-   * @param timeEntrySyncedObjectWrapper 
-   * @param someDaysAgoFilter 
+   * @param timeEntrySyncedObjectWrapper
+   * @param someDaysAgoFilter
    */
   private async _checkTimeEntrySyncedObject(
     timeEntrySyncedObjectWrapper: TimeEntrySyncedObjectWrapper,
     someDaysAgoFilter: Date)
     : Promise<boolean> {
     // firstly, find origin service
-    // if TE defined => loop through all other TEs and find the last updated one, 
+    // if TE defined => loop through all other TEs and find the last updated one,
     //    if timeEntrySyncedObjectWrapper.lastUpdated is same as that one => scenario b2) otherwise b1)
     // also, if TE missing, but STEO is there for given TE, scenario e)
     // also, if there is missing STEO for some service => scenario c)
@@ -388,8 +396,8 @@ export class TimeEntriesSyncJob extends SyncJob {
    * Also creates new STEO and pushes it to the given TESO.
    * Updates given TESO's lastUpdated property to newly created TE's date.
    * Returns newly created TE if ok, otherwise undefined
-   * 
-   * @param otherServicesMappingsObjects 
+   *
+   * @param otherServicesMappingsObjects
    * @param serviceDefinition
    * @param timeEntryModel given TE model
    * @param timeEntrySyncedObject given TESO
@@ -413,7 +421,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       ));
     }
 
-    const service = SyncedServiceCreator.create(serviceDefinition);
+    const service = SyncedServiceCreator.create(serviceDefinition, this._user);
     const createdTimeEntry = await service.createTimeEntry(
       timeEntryModel.durationInMilliseconds,
       new Date(timeEntryModel.start),
@@ -440,9 +448,9 @@ export class TimeEntriesSyncJob extends SyncJob {
 
   /**
    * Updates technical properties of given TESO => lastUpdated and date
-   * @param timeEntrySyncedObject 
-   * @param lastUpdated 
-   * @param date 
+   * @param timeEntrySyncedObject
+   * @param lastUpdated
+   * @param date
    */
   private _updateTimeEntrySyncedObject(
     timeEntrySyncedObject: TimeEntrySyncedObject,
