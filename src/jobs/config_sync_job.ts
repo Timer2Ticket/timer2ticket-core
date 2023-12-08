@@ -10,11 +10,7 @@ import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
-import * as Sentry from '@sentry/node';
-import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/error_service";
-import {ExtraContext} from "../models/extra_context";
-import {TogglTrackSyncedService} from "../synced_services/toggl/toggl_synced_service";
+
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -209,7 +205,7 @@ export class ConfigSyncJob extends SyncJob {
       for (const timeEntryToArchive of timeEntriesToArchive) {
 
         if (togglService !== undefined) {
-          let toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
+          const toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
               (element) => element.service === "TogglTrack");
           if (toggleTimeEntry !== undefined && timeEntryToArchive.issueName !== undefined) {
             try {
