@@ -100,7 +100,7 @@ export class ConfigSyncJob extends SyncJob {
           mapping = await this._createMapping(objectToSync, secondaryServiceWrapper);
         } else {
           // scenario b), d), e), f)
-          const result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
+          const result = await this._checkMapping(objectToSync, mapping, secondaryServiceWrapper);
           operationsOk &&= result;
         }
 
