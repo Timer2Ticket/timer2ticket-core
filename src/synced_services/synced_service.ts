@@ -6,6 +6,7 @@ import {Timer2TicketError} from "../models/timer2TicketError";
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
 import {Connection} from "../models/connection/connection";
+import {User} from "../models/user/user";
 
 export interface SyncedService {
 

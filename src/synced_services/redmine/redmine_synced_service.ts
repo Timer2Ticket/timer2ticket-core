@@ -8,7 +8,7 @@ import { Utilities } from "../../shared/utilities";
 import { MappingsObject } from "../../models/connection/mapping/mappings_object";
 import { Mapping } from "../../models/connection/mapping/mapping";
 import { Constants } from "../../shared/constants";
-import {User} from "../../models/user";
+import {User} from "../../models/user/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";

@@ -6,7 +6,7 @@ import { ServiceObject } from "../../models/synced_service/service_object/servic
 import { Mapping } from "../../models/connection/mapping/mapping";
 import { MappingsObject } from "../../models/connection/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
-import {User} from "../../models/user";
+import {User} from "../../models/user/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
