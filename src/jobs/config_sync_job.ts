@@ -16,7 +16,7 @@ export class ConfigSyncJob extends SyncJob {
    * This job takes mappings from the user and checks if there are any problems with them
    * If there are no mappings, job is called probably for the first time for this user
    * Should create all mappings and sync all projects, issues etc. from primary service to the other ones
-   * 
+   *
    * If mappings are there, should check if all are correct and updated
    * E.g. looks for project definition in one service and checks if mapping is synced in PRIMARY (for example name could change, or project has been deleted)
    * If not, updates mappings and propagates change through other services
@@ -189,6 +189,7 @@ export class ConfigSyncJob extends SyncJob {
                   operationsOk = false;
                 } else {
                   // console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
+                  foundTESO.issueName = mapping.mappingsObjects.find(element => element.service === "TogglTrack")?.name;
                   timeEntriesToArchive.push(foundTESO);
                 }
               }
@@ -199,9 +200,24 @@ export class ConfigSyncJob extends SyncJob {
         // scenario c)
         operationsOk &&= await this._deleteMapping(mapping);
       }
-
+      //TODO figure out how to pass TogglTrack in better
+      const togglService = secondaryServicesWrappersMap.get("TogglTrack");
       // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
       for (const timeEntryToArchive of timeEntriesToArchive) {
+
+        if (togglService !== undefined) {
+          const toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
+              (element) => element.service === "TogglTrack");
+          if (toggleTimeEntry !== undefined && timeEntryToArchive.issueName !== undefined) {
+            try {
+              await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
+            }
+              catch (exception) {
+                operationsOk = false;
+              }
+          }
+
+        }
         const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
         operationsOk &&= updateResponse !== null;
       }

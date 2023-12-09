@@ -9,6 +9,7 @@ export class TimeEntrySyncedObject {
   date: Date | undefined;
   serviceTimeEntryObjects: ServiceTimeEntryObject[];
   archived?: boolean;
+  issueName?: string;
 
   constructor(userId: string | ObjectId, date: string | number | Date) {
     this.userId = userId;

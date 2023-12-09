@@ -11,6 +11,7 @@ import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
+import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -350,6 +351,32 @@ export class TogglTrackSyncedService implements SyncedService {
     });
 
     return entries;
+  }
+
+  async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
+    let start = new Date();
+    start.setMonth(start.getMonth() - 6);
+    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
+
+    if (timeEntryFromApi === null) {
+       return;
+    }
+
+    let body =
+      [
+        {'op': 'replace',
+          'path': '/description',
+          'value': timeEntryFromApi != null ? timeEntryFromApi?.text + ` ${tagName}` : `${tagName}`
+        }
+      ]
+    ;
+
+    let response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+            .patch(`${this._workspacesTimeEntriesUri}/${timeEntry?.id}`)
+            .auth(this._serviceDefinition.apiKey, 'api_token')
+            .send(body)
+    );
   }
 
   async getTimeEntryById(id: number | string, start?: Date): Promise<TimeEntry | null> {
