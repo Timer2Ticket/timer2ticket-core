@@ -325,9 +325,27 @@ export class ConfigSyncJob extends SyncJob {
         } else if (objectBasedOnMapping.name !== serviceWrapper.syncedService.getFullNameForServiceObject(objectToSync)) {
           // scenario b)
           // name is incorrect => maybe mapping was outdated or/and real object was outdated
-          const updatedObject = await serviceWrapper.syncedService.updateServiceObject(
-            mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
-          );
+          let updatedObject = null;
+          try {
+                updatedObject = await serviceWrapper.syncedService.updateServiceObject(
+                mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
+            );
+          } catch (ex: any) {
+            if (ex.status !== 400) {
+              throw ex;
+            }
+            // 400 ~ maybe object already exists and cannot be updated (for example object needs to be unique - name)?
+            // => try to find it and use it for the mapping
+            const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));
+            updatedObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
+            if (!updatedObject) {
+              const context = [
+                this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
+              ]
+              this._sentryService.logError(ex, context);
+              throw ex;
+            }
+          }
           // console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
           mappingsObject.name = updatedObject.name;
           mappingsObject.lastUpdated = Date.now();
@@ -346,7 +364,7 @@ export class ConfigSyncJob extends SyncJob {
     try {
       newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
     } catch (ex: any) {
-      if (ex.statusCode !== 400) {
+      if (ex.status !== 400) {
         throw ex;
       }
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
