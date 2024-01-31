@@ -34,6 +34,26 @@ export class ConfigSyncJob extends SyncJob {
   }
 
   private async _doTicket2TicketSync() {
+    console.log('config job for 2 project tools started')
+    //get synced services
+    const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
+    const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
+    //get config objects
+    const firstServiceObjectsToSync = await firstSyncedService.getAllServiceObjects()
+    const secondServiceObjectsToSync = await secondSyncedService.getAllServiceObjects()
+    if (typeof firstServiceObjectsToSync === "boolean" || typeof secondServiceObjectsToSync === "boolean") {
+      const message = `Problem occurred while getting ${firstServiceObjectsToSync === false ? 'first' : 'second'} service objects.`;
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
+      return false;
+    }
+    //check existing mappings
+
+    //update mappings
+    //create mappings
+    //delete mappings
+
+    console.log('config job for 2 project tools finished')
     return false
   }
 
@@ -68,6 +88,8 @@ export class ConfigSyncJob extends SyncJob {
       await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
+
+    //here
 
     const secondaryServiceWrapper = new SyncedServiceWrapper(
       secondaryServiceDefinition,
