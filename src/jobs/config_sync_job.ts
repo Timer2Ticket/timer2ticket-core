@@ -25,7 +25,19 @@ export class ConfigSyncJob extends SyncJob {
    */
   protected async _doTheJob(): Promise<boolean> {
     console.log('Config sync job started for connection '.concat(this._connection._id.toHexString()));
+    if (this._isTicket2TicketSync()) {
+      return await this._doTicket2TicketSync()
+    } else {
+      return await this._doTimer2TicketSync()
+    }
 
+  }
+
+  private async _doTicket2TicketSync() {
+    return false
+  }
+
+  private async _doTimer2TicketSync() {
     const primaryServiceDefinition: SyncedServiceDefinition | undefined = Connection.getPrimaryServiceDefinition(this._connection);
 
     if (!primaryServiceDefinition) {
@@ -388,6 +400,16 @@ export class ConfigSyncJob extends SyncJob {
 
     // if any of those operations did fail, return false
     return operationsOk;
+  }
+
+  /*
+  checkes if we sync timer-tiket or ticket-ticket tools
+  returns true if ticket-ticket, false othewise
+  */
+  private _isTicket2TicketSync() {
+    return (this._connection.firstService.name === 'Jira' || this._connection.firstService.name === 'Redmine')
+      ? (this._connection.secondService.name === 'Jira' || this._connection.secondService.name === 'Redmine')
+      : false
   }
 }
 
