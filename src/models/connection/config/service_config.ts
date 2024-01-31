@@ -2,6 +2,7 @@ import { DefaultTimeEntryActivity } from './default_time_entry_activity';
 import { FallbackIssue } from './fallback_issue';
 import { Workspace } from './workspace';
 import { IssueState } from './issue_state';
+import { CustomField } from './custom_field';
 
 export class ServiceConfig {
   /**
@@ -26,4 +27,7 @@ export class ServiceConfig {
 
   //for Jira, later Redmine
   ignoredIssueStates!: IssueState[] // can be empty
+
+  //for ticket2ticket connection
+  customField!: CustomField | null
 }
