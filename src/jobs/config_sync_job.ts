@@ -39,14 +39,19 @@ export class ConfigSyncJob extends SyncJob {
     const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
     const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
     //get config objects
-    const firstServiceObjectsToSync = await firstSyncedService.getAllServiceObjects()
-    const secondServiceObjectsToSync = await secondSyncedService.getAllServiceObjects()
+    const firstServiceObjectsToSync = await firstSyncedService.getAllServiceObjects(this._connection.firstService.config.customField?.id)
+    const secondServiceObjectsToSync = await secondSyncedService.getAllServiceObjects(this._connection.secondService.config.customField?.id)
     if (typeof firstServiceObjectsToSync === "boolean" || typeof secondServiceObjectsToSync === "boolean") {
       const message = `Problem occurred while getting ${firstServiceObjectsToSync === false ? 'first' : 'second'} service objects.`;
       this._jobLog.errors.push(this._errorService.createConfigJobError(message));
       await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
+
+    //console.log(secondServiceObjectsToSync)
+    // .find(o => {
+    //   o.id == '10017'
+    // }))
     //check existing mappings
 
     //update mappings

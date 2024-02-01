@@ -109,9 +109,9 @@ export class RedmineSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+  async getAllServiceObjects(syncCustomFieldValue: string | number | null = null): Promise<ServiceObject[] | boolean> {
     const projects = await this._getAllProjects();
-    const additionalServiceObjects = await this._getAllAdditionalServiceObjects();
+    const additionalServiceObjects = await this._getAllAdditionalServiceObjects(syncCustomFieldValue);
     if (typeof projects === "boolean" || typeof additionalServiceObjects === "boolean") {
       return false;
     }
@@ -194,7 +194,7 @@ export class RedmineSyncedService implements SyncedService {
   /**
    * Return Issues and Activities both in array of service objects
    */
-  private async _getAllAdditionalServiceObjects(): Promise<ServiceObject[] | boolean> {
+  private async _getAllAdditionalServiceObjects(syncCustomFieldValue?: string | number | null): Promise<ServiceObject[] | boolean> {
     let totalCount = 0;
 
     const queryParams = {
@@ -222,12 +222,22 @@ export class RedmineSyncedService implements SyncedService {
       }
 
 
-      responseIssues.body?.issues.forEach((issue: never) => {
+      responseIssues.body?.issues.forEach((issue: any) => {
+        const customFields = syncCustomFieldValue ? issue['custom_fields'] : null
+        let custFieldValue = null
+        if (Array.isArray(customFields)) {
+          custFieldValue = issue.custom_fields.find((f: any) => {
+            return f.id === syncCustomFieldValue
+          }).value
+        }
+        console.log(issue.id, custFieldValue)
         issues.push(
           new ServiceObject(
             issue['id'],
             issue['subject'],
             this._issuesType,
+            issue['project']['id'],
+            custFieldValue
           ));
       });
 
