@@ -230,7 +230,6 @@ export class RedmineSyncedService implements SyncedService {
             return f.id === syncCustomFieldValue
           }).value
         }
-        console.log(issue.id, custFieldValue)
         issues.push(
           new ServiceObject(
             issue['id'],
