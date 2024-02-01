@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { Mapping } from "./mapping/mapping";
 import { SyncJobDefinition } from "./config/sync_job_definition";
 import { SyncedServiceDefinition } from "./config/synced_service_definition";
+import { ProjectMapping } from './mapping/project_mapping';
 
 export class Connection {
   // Mongo
@@ -22,6 +23,7 @@ export class Connection {
   deleteTimestamp!: number | null;
   createdTimestamp!: number;
   mappings!: Mapping[];
+  projectMappings!: ProjectMapping[];
 
   static getConnectionBetweenString(connection: Connection): string {
     return `${SyncedServiceDefinition.getSyncServiceName(connection.firstService)} - ${SyncedServiceDefinition.getSyncServiceName(connection.secondService)}`;
