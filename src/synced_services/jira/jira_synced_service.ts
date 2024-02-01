@@ -66,12 +66,12 @@ export class jiraSyncedService implements SyncedService {
    * Get all service objects which: projects, issues (with the right state), activities etc.
    * returns false in case of any error
    */
-    async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+    async getAllServiceObjects(syncCustomField: string | number | null = null): Promise<ServiceObject[] | boolean> {
         const allServiceObjects: ServiceObject[] = []
         const projects = await this._getAllProjects()
         allServiceObjects.push(...projects)
 
-        const issues = await this._getIssues(projects)
+        const issues = await this._getIssues(projects, syncCustomField)
         if (issues.length >= 1 && projects.length === 0)
             return false
         allServiceObjects.push(...issues)
@@ -100,10 +100,10 @@ export class jiraSyncedService implements SyncedService {
         return projects
     }
 
-    private async _getIssues(projects: ServiceObject[]): Promise<ServiceObject[]> {
+    private async _getIssues(projects: ServiceObject[], syncCustomField: string | number | null): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
         for (const project of projects) {
-            const issuesOfProject = await this._getIssuesOfProject(project.id, true)
+            const issuesOfProject = await this._getIssuesOfProject(project.id, true, syncCustomField)
             issues.push(...issuesOfProject)
         }
         return issues
@@ -111,9 +111,8 @@ export class jiraSyncedService implements SyncedService {
 
 
 
-    private async _getIssuesOfProject(projectIdOrKey: string | number, selectByState: boolean, start?: Date, end?: Date): Promise<ServiceObject[]> {
+    private async _getIssuesOfProject(projectIdOrKey: string | number, selectByState: boolean, syncCustomField: string | number | null, start?: Date, end?: Date): Promise<ServiceObject[]> {
         const issues: ServiceObject[] = []
-
         let total = 1
         let received = 0
         while (total > received) {
@@ -133,7 +132,8 @@ export class jiraSyncedService implements SyncedService {
             const responseIssues = response.body.issues
             responseIssues.forEach((issue: any) => {
                 received++
-                issues.push(new ServiceObject(issue.id, issue.fields.summary, this._issuesType))
+                const custFieldValue = syncCustomField ? issue.fields[syncCustomField] : null
+                issues.push(new ServiceObject(issue.id, issue.fields.summary, this._issuesType, issue.fields.project.id, custFieldValue))
             })
         }
         return issues
@@ -204,7 +204,7 @@ export class jiraSyncedService implements SyncedService {
 
         const projects = await this._getAllProjects()
         for (const project of projects) {
-            const issues = await this._getIssuesOfProject(project.id, false, start, end)
+            const issues = await this._getIssuesOfProject(project.id, false, null, start, end)
             for (const issue of issues) {
                 let response
                 try {
