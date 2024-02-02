@@ -454,6 +454,20 @@ export class jiraSyncedService implements SyncedService {
         return timeEntries
     }
 
+    async getIssueIdFromIssueKey(issueKey: string): Promise<number> {
+        let response
+        try {
+            response = await superagent
+                .get(`${this._issueUri}/${issueKey}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .accept('application/json')
+        } catch (ex: any) {
+            this.handleResponseException(ex, `getting id of Issue with key ${issueKey} failed`, `${this._issueUri}/`)
+            return 0
+        }
+        return response.body.id
+    }
+
     private _getcommentOfWorklog(worklog: any): string {
         if (worklog.comment && worklog.comment.content[0] && worklog.comment.content[0].content[0] && worklog.comment.content[0].content[0].text) {
             return worklog.comment.content[0].content[0].text
