@@ -13,6 +13,7 @@ import { Connection } from "../models/connection/connection";
 import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 import { ProjectMapping } from "../models/connection/mapping/project_mapping";
 import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
+import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -37,7 +38,7 @@ export class ConfigSyncJob extends SyncJob {
   /*
     Does sync between 2 project tools config objects
     Downloads all config objects, creates pairs based on selected mapping custom field,
-    ... TODO
+    creates new and deletes deleted mappings
   */
   private async _doTicket2TicketSync() {
     console.log('config job for 2 project tools started')
@@ -87,23 +88,25 @@ export class ConfigSyncJob extends SyncJob {
 
     // c) Mapping is there, but object is not there (in primary service)
     //    => delete mapping
-    const mappingsToKeep: Mapping[] = new Array()
+    const mappingsToDelete: Mapping[] = new Array()
     for (let oldMapping of this._connection.mappings) {
       const found = newMappings.find((m: Mapping) => {
         return m.primaryObjectId === oldMapping.primaryObjectId
       })
-      if (found) {
-        mappingsToKeep.push(oldMapping)
+      if (!found) {
+        mappingsToDelete.push(oldMapping)
       }
     }
 
+    let resultOK = true
     //remove old mappings
-    this._connection.mappings = mappingsToKeep
+    resultOK = await this._deleteObsoleteMappingsAndTESOs(mappingsToDelete)
+
 
     //add new mappings
     this._connection.mappings.push(...missingMappings)
 
-    // await this.updateConnectionConfigSyncJobLastDone(true);
+    // await this.updateConnectionConfigSyncJobLastDone(resultOK);
 
     // // persist changes in the mappings
     // // even if some api operations were not ok, persist changes to the mappings - better than nothing
@@ -561,6 +564,38 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
     return newMappings
+  }
+
+  private async _deleteObsoleteMappingsAndTESOs(mappingsToDelete: Mapping[]): Promise<boolean> {
+    //find TESOs
+    const relatedTE: any[] = []
+    for (let mapping of mappingsToDelete) {
+      const firstService = SyncedServiceCreator.create(this._connection.firstService)
+      //    const secondService = SyncedServiceCreator.create(this._connection.secondService)
+      //   let TESOs: TimeEntry[] = []
+      const TESOsFromFirst = await firstService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
+      //      const TESOsFromSecond = await secondService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
+      if (TESOsFromFirst) {
+        for (const TE of TESOsFromFirst) {
+          for (const timeEntryFromApi of TESOsFromFirst) {
+            const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, this._connection.firstService.name, this._user._id);
+            if (foundTESO) {
+              // timeEntriesToArchive.push(foundTESO);
+            }
+          }
+        }
+      }
+    }
+    // // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
+    // for(const timeEntryToArchive of timeEntriesToArchive) {
+    //   const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
+    //   operationsOk &&= updateResponse !== null;
+    // }
+
+    //delete TESOs
+
+    //remove Mappings from this.connection...mappings
+    return true
   }
 }
 
