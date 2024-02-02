@@ -11,6 +11,7 @@ import { SyncJob } from "./sync_job";
 import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import { Connection } from "../models/connection/connection";
 import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
+import { ProjectMapping } from "../models/connection/mapping/project_mapping";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -33,6 +34,11 @@ export class ConfigSyncJob extends SyncJob {
 
   }
 
+  /*
+    Does sync between 2 project tools config objects
+    Downloads all config objects, creates pairs based on selected mapping custom field,
+    ... TODO
+  */
   private async _doTicket2TicketSync() {
     console.log('config job for 2 project tools started')
     //get synced services
@@ -47,11 +53,16 @@ export class ConfigSyncJob extends SyncJob {
       await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
+    //filter only issues with custom field filled
+    //custom filed must be filled, unless I am not able to pair the issues
+    const firstServiceIssuesTosync = firstServiceObjectsToSync.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
+    const secondServiceIssuesTosync = secondServiceObjectsToSync.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
+    const newMappings = this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
 
-    //console.log(secondServiceObjectsToSync)
-    // .find(o => {
-    //   o.id == '10017'
-    // }))
     //check existing mappings
 
     //update mappings
@@ -93,8 +104,6 @@ export class ConfigSyncJob extends SyncJob {
       await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
-
-    //here
 
     const secondaryServiceWrapper = new SyncedServiceWrapper(
       secondaryServiceDefinition,
@@ -437,6 +446,73 @@ export class ConfigSyncJob extends SyncJob {
     return (this._connection.firstService.name === 'Jira' || this._connection.firstService.name === 'Redmine')
       ? (this._connection.secondService.name === 'Jira' || this._connection.secondService.name === 'Redmine')
       : false
+  }
+
+  private _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Mapping[] {
+    const newMappings: Mapping[] = new Array()
+    newMappings.push(...this._createTicket2TicketMapping(firstServiceObjects, secondServiceObjects, true))
+    newMappings.push(...this._createTicket2TicketMapping(secondServiceObjects, firstServiceObjects, false))
+    return newMappings
+  }
+
+  private _getIdOfAnotherServiceIdFromLink(service: SyncedServiceDefinition, customFieldValue: string | number | null): string | number | null {
+    if (customFieldValue && service.name === 'Jira') {
+      //issue key is used in jira link, need to extract it and get key via API request
+      const splitedValue = customFieldValue.toString().split('/')
+      const issueKey = splitedValue[splitedValue.length - 1]
+      const issueId = issueKey //TODO get ID instead of key
+      return issueId
+    } else if (customFieldValue && service.name === 'Redmine') {
+      const splitedValue = customFieldValue.toString().split('/')
+      const idPlusQuery = splitedValue[splitedValue.length - 1]
+      const issueId = idPlusQuery.split('?')[0]
+      return issueId
+    } else {
+      return null
+    }
+  }
+
+  private _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[], first: boolean): Mapping[] {
+    const newMappings: Mapping[] = new Array()
+    for (let firstObject of firstServiceObjects) {
+      const idOfSecond = this._getIdOfAnotherServiceIdFromLink(this._connection.firstService, firstObject.syncCustomFieldValue)
+      if (idOfSecond) {//'second objects has link to the first => first is primary
+        const secondObject = secondServiceObjects.find((o: ServiceObject) => {
+          return o.id == idOfSecond
+        })
+        if (secondObject) {
+          const areInTheProjectPair = this._connection.projectMappings.filter((p: ProjectMapping) => {
+            first
+              ? (p.idFirstService === firstObject.projectId && p.idSecondService === secondObject.projectId)
+              : (p.idFirstService === secondObject.projectId && p.idSecondService === firstObject.projectId)
+          })
+          if (areInTheProjectPair) {
+
+            const mapping = new Mapping()
+            mapping.primaryObjectId = firstObject.id
+            mapping.primaryObjectType = firstObject.type
+            mapping.name = firstObject.name
+            mapping.mappingsObjects.push(
+              new MappingsObject(
+                firstObject.id,
+                firstObject.name,
+                first ? this._connection.firstService.name : this._connection.secondService.name,
+                firstObject.type)
+            )
+
+            const secondMappingsObject =
+              new MappingsObject(
+                secondObject.id,
+                secondObject.name,
+                first ? this._connection.secondService.name : this._connection.firstService.name,
+                secondObject.type)
+            mapping.mappingsObjects.push(secondMappingsObject)
+            newMappings.push(mapping)
+          }
+        }
+      }
+    }
+    return newMappings
   }
 }
 
