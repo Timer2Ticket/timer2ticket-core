@@ -12,6 +12,7 @@ import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synce
 import { Connection } from "../models/connection/connection";
 import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 import { ProjectMapping } from "../models/connection/mapping/project_mapping";
+import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -31,7 +32,6 @@ export class ConfigSyncJob extends SyncJob {
     } else {
       return await this._doTimer2TicketSync()
     }
-
   }
 
   /*
@@ -61,16 +61,58 @@ export class ConfigSyncJob extends SyncJob {
     const secondServiceIssuesTosync = secondServiceObjectsToSync.filter((o: ServiceObject) => {
       return o.syncCustomFieldValue
     })
-    const newMappings = this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
+    let newMappings: Mapping[] = []
+    try {
+      newMappings = await this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
+    } catch (e: any) {
+      const message = `Problem occured while creating Mappings from remote services`
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
+      return false
+    }
+    // Check mappings, if something is wrong, fix it
+    // Scenarios (based on objects from primary service):
 
-    //check existing mappings
+    // a) Mapping is missing
+    //    => create mapping
+    const missingMappings: Mapping[] = new Array()
+    for (let newMapping of newMappings) {
+      const found = this._connection.mappings.find((m: Mapping) => {
+        return m.primaryObjectId === newMapping.primaryObjectId
+      })
+      if (!found) {
+        missingMappings.push(newMapping)
+      }
+    }
 
-    //update mappings
-    //create mappings
-    //delete mappings
+    // c) Mapping is there, but object is not there (in primary service)
+    //    => delete mapping
+    const mappingsToKeep: Mapping[] = new Array()
+    for (let oldMapping of this._connection.mappings) {
+      const found = newMappings.find((m: Mapping) => {
+        return m.primaryObjectId === oldMapping.primaryObjectId
+      })
+      if (found) {
+        mappingsToKeep.push(oldMapping)
+      }
+    }
 
-    console.log('config job for 2 project tools finished')
-    return false
+    //remove old mappings
+    this._connection.mappings = mappingsToKeep
+
+    //add new mappings
+    this._connection.mappings.push(...missingMappings)
+
+    // await this.updateConnectionConfigSyncJobLastDone(true);
+
+    // // persist changes in the mappings
+    // // even if some api operations were not ok, persist changes to the mappings - better than nothing
+    // await databaseService.updateConnectionMappings(this._connection);
+
+    // await databaseService.updateJobLog(this._jobLog);
+
+    console.log("Config sync job for connection " + this._connection._id.toHexString() + " finished.");
+    return true
   }
 
   private async _doTimer2TicketSync() {
@@ -448,20 +490,26 @@ export class ConfigSyncJob extends SyncJob {
       : false
   }
 
-  private _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Mapping[] {
+  private async _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Promise<Mapping[]> {
     const newMappings: Mapping[] = new Array()
-    newMappings.push(...this._createTicket2TicketMapping(firstServiceObjects, secondServiceObjects, true))
-    newMappings.push(...this._createTicket2TicketMapping(secondServiceObjects, firstServiceObjects, false))
+    const firstSecond = await this._createTicket2TicketMapping(firstServiceObjects, secondServiceObjects, true)
+    const secondFirst = await this._createTicket2TicketMapping(secondServiceObjects, firstServiceObjects, false)
+    newMappings.push(...firstSecond)
+    newMappings.push(...secondFirst)
     return newMappings
   }
 
-  private _getIdOfAnotherServiceIdFromLink(service: SyncedServiceDefinition, customFieldValue: string | number | null): string | number | null {
+  private async _getIdOfAnotherServiceIdFromLink(service: SyncedServiceDefinition, customFieldValue: string | number | null): Promise<string | number | null> {
     if (customFieldValue && service.name === 'Jira') {
       //issue key is used in jira link, need to extract it and get key via API request
       const splitedValue = customFieldValue.toString().split('/')
       const issueKey = splitedValue[splitedValue.length - 1]
-      const issueId = issueKey //TODO get ID instead of key
-      return issueId
+      const syncedService = new jiraSyncedService(service)
+      const issueId = syncedService.getIssueIdFromIssueKey(issueKey)
+      if (issueId)
+        return issueId
+      else
+        return null
     } else if (customFieldValue && service.name === 'Redmine') {
       const splitedValue = customFieldValue.toString().split('/')
       const idPlusQuery = splitedValue[splitedValue.length - 1]
@@ -472,10 +520,10 @@ export class ConfigSyncJob extends SyncJob {
     }
   }
 
-  private _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[], first: boolean): Mapping[] {
+  private async _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[], first: boolean): Promise<Mapping[]> {
     const newMappings: Mapping[] = new Array()
     for (let firstObject of firstServiceObjects) {
-      const idOfSecond = this._getIdOfAnotherServiceIdFromLink(this._connection.firstService, firstObject.syncCustomFieldValue)
+      const idOfSecond = await this._getIdOfAnotherServiceIdFromLink(this._connection.firstService, firstObject.syncCustomFieldValue)
       if (idOfSecond) {//'second objects has link to the first => first is primary
         const secondObject = secondServiceObjects.find((o: ServiceObject) => {
           return o.id == idOfSecond
