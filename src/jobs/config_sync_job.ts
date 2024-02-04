@@ -106,16 +106,16 @@ export class ConfigSyncJob extends SyncJob {
     //add new mappings
     this._connection.mappings.push(...missingMappings)
 
-    // await this.updateConnectionConfigSyncJobLastDone(resultOK);
+    await this.updateConnectionConfigSyncJobLastDone(resultOK);
 
-    // // persist changes in the mappings
-    // // even if some api operations were not ok, persist changes to the mappings - better than nothing
-    // await databaseService.updateConnectionMappings(this._connection);
+    // persist changes in the mappings
+    // even if some api operations were not ok, persist changes to the mappings - better than nothing
+    await databaseService.updateConnectionMappings(this._connection);
 
-    // await databaseService.updateJobLog(this._jobLog);
+    await databaseService.updateJobLog(this._jobLog);
 
     console.log("Config sync job for connection " + this._connection._id.toHexString() + " finished.");
-    return true
+    return resultOK
   }
 
   private async _doTimer2TicketSync() {
@@ -567,35 +567,51 @@ export class ConfigSyncJob extends SyncJob {
   }
 
   private async _deleteObsoleteMappingsAndTESOs(mappingsToDelete: Mapping[]): Promise<boolean> {
-    //find TESOs
-    const relatedTE: any[] = []
+    let success = true
+    const timeEntriesToArchive: TimeEntrySyncedObject[] = new Array()
+    //find TESOs to Archive
     for (let mapping of mappingsToDelete) {
       const firstService = SyncedServiceCreator.create(this._connection.firstService)
-      //    const secondService = SyncedServiceCreator.create(this._connection.secondService)
-      //   let TESOs: TimeEntry[] = []
+      const secondService = SyncedServiceCreator.create(this._connection.secondService)
+      const TESOs: TimeEntry[] = new Array()
       const TESOsFromFirst = await firstService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
-      //      const TESOsFromSecond = await secondService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
-      if (TESOsFromFirst) {
-        for (const TE of TESOsFromFirst) {
-          for (const timeEntryFromApi of TESOsFromFirst) {
-            const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, this._connection.firstService.name, this._user._id);
-            if (foundTESO) {
-              // timeEntriesToArchive.push(foundTESO);
-            }
+      const TESOsFromSecond = await secondService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
+      if (TESOsFromFirst)
+        TESOs.push(...TESOsFromFirst)
+      if (TESOsFromSecond)
+        TESOs.push(...TESOsFromSecond)
+      if (TESOs) {
+        for (let i = 0; i < TESOs.length; i++) {
+          const timeEntryFromApi = TESOs[i]
+          const firstOrSecond = TESOsFromFirst ? i < TESOsFromFirst.length : false
+          const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(
+            timeEntryFromApi.id,
+            firstOrSecond ? this._connection.firstService.name : this._connection.secondService.name,
+            this._user._id);
+          if (foundTESO) {
+            timeEntriesToArchive.push(foundTESO);
           }
         }
+      } else {
+        success = false
       }
     }
-    // // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
-    // for(const timeEntryToArchive of timeEntriesToArchive) {
-    //   const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
-    //   operationsOk &&= updateResponse !== null;
-    // }
-
-    //delete TESOs
-
+    //deleteTESOs
+    for (const timeEntryToArchive of timeEntriesToArchive) {
+      const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
+      if (!updateResponse) {
+        success = false
+      }
+    }
     //remove Mappings from this.connection...mappings
-    return true
+    this._connection.mappings
+      = this._connection
+        .mappings
+        .filter(
+          mapping => mappingsToDelete.find(obsolete => obsolete === mapping)
+            === undefined);
+
+    return success
   }
 }
 
