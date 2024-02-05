@@ -36,7 +36,6 @@ export class TimeEntriesSyncJob extends SyncJob {
     start.setMinutes(0);
 
     let operationsOk = true;
-
     // Need to load all time entries (TE) for each service
     // Try to find time entry in timeEntrySyncedObjects (TESOs) from DB
     // Scenarios:
@@ -172,6 +171,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     await this.updateConnectionConfigSyncJobLastDone(operationsOk);
 
+
     console.log("Time entry sync job for connection " + this._connection._id.toHexString() + " finished.");
     return operationsOk;
   }
@@ -207,7 +207,6 @@ export class TimeEntriesSyncJob extends SyncJob {
     );
 
     const otherServicesMappingsObjects = timeEntryOriginServiceWrapper.syncedService.extractMappingsObjectsFromTimeEntry(timeEntry, this._connection.mappings);
-
     if (otherServicesMappingsObjects.length === 0) {
       // TE sync is not required (e.g. not project selected etc.)
       return null;

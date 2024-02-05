@@ -105,7 +105,6 @@ export class RedmineSyncedService implements SyncedService {
       // (Seems like Redmine does not respond with 429, but handled just in case.)
       await this._wait();
     }
-
     return response;
   }
 
@@ -507,6 +506,7 @@ export class RedmineSyncedService implements SyncedService {
       //TODO potentially add some minor logging here
       return null;
     }
+
 
     const createdStart = new Date(response.body.time_entry['spent_on']);
     const createdEnd = new Date(new Date(response.body.time_entry['spent_on']).setMilliseconds(durationInMilliseconds));
