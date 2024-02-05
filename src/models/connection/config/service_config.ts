@@ -8,7 +8,7 @@ export class ServiceConfig {
   /**
    * shared
    */
-  userId!: number;
+  userId!: number | string;
   apiKey!: string;
   // For Redmine
   defaultTimeEntryActivity!: DefaultTimeEntryActivity | null;
