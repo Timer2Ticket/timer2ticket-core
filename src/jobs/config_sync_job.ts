@@ -54,18 +54,18 @@ export class ConfigSyncJob extends SyncJob {
       await this.updateConnectionConfigSyncJobLastDone(false);
       return false;
     }
-    //filter only issues with custom field filled
-    //custom filed must be filled, unless I am not able to pair the issues
+    //filter only issues with 
     const firstServiceIssuesTosync = firstServiceObjectsToSync.filter((o: ServiceObject) => {
-      return o.syncCustomFieldValue
+      return o.type === 'issue'
     })
     const secondServiceIssuesTosync = secondServiceObjectsToSync.filter((o: ServiceObject) => {
-      return o.syncCustomFieldValue
+      return o.type === 'issue'
     })
     let newMappings: Mapping[] = []
     try {
       newMappings = await this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
     } catch (e: any) {
+      console.log('nepovedlo se vytvorit nove P2P mapovani')
       const message = `Problem occured while creating Mappings from remote services`
       this._jobLog.errors.push(this._errorService.createConfigJobError(message));
       await this.updateConnectionConfigSyncJobLastDone(false);
@@ -494,9 +494,15 @@ export class ConfigSyncJob extends SyncJob {
   }
 
   private async _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Promise<Mapping[]> {
+    const firstServiceIssuesWithCustField = firstServiceObjects.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
+    const secondServiceIssuesWithCustField = secondServiceObjects.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
     const newMappings: Mapping[] = new Array()
-    const firstSecond = await this._createTicket2TicketMapping(firstServiceObjects, secondServiceObjects, true)
-    const secondFirst = await this._createTicket2TicketMapping(secondServiceObjects, firstServiceObjects, false)
+    const firstSecond = await this._createTicket2TicketMapping(firstServiceObjects, secondServiceIssuesWithCustField, true)
+    const secondFirst = await this._createTicket2TicketMapping(secondServiceObjects, firstServiceIssuesWithCustField, false)
     newMappings.push(...firstSecond)
     newMappings.push(...secondFirst)
     return newMappings
@@ -508,7 +514,7 @@ export class ConfigSyncJob extends SyncJob {
       const splitedValue = customFieldValue.toString().split('/')
       const issueKey = splitedValue[splitedValue.length - 1]
       const syncedService = new jiraSyncedService(service)
-      const issueId = syncedService.getIssueIdFromIssueKey(issueKey)
+      const issueId = await syncedService.getIssueIdFromIssueKey(issueKey)
       if (issueId)
         return issueId
       else
@@ -523,22 +529,21 @@ export class ConfigSyncJob extends SyncJob {
     }
   }
 
-  private async _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[], first: boolean): Promise<Mapping[]> {
+  private async _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjectsWithCustField: ServiceObject[], first: boolean): Promise<Mapping[]> {
     const newMappings: Mapping[] = new Array()
-    for (let firstObject of firstServiceObjects) {
-      const idOfSecond = await this._getIdOfAnotherServiceIdFromLink(this._connection.firstService, firstObject.syncCustomFieldValue)
-      if (idOfSecond) {//'second objects has link to the first => first is primary
-        const secondObject = secondServiceObjects.find((o: ServiceObject) => {
-          return o.id == idOfSecond
+    for (const secondObject of secondServiceObjectsWithCustField) {
+      const idOfFirst = await this._getIdOfAnotherServiceIdFromLink(first ? this._connection.firstService : this._connection.secondService, secondObject.syncCustomFieldValue)
+      if (idOfFirst) {//'second objects has link to the first => first is primary
+        const firstObject = firstServiceObjects.find((o: ServiceObject) => {
+          return o.id == idOfFirst
         })
-        if (secondObject) {
+        if (firstObject) {
+          //check if projects corespond with those that should be paired
           const areInTheProjectPair = this._connection.projectMappings.filter((p: ProjectMapping) => {
-            first
-              ? (p.idFirstService === firstObject.projectId && p.idSecondService === secondObject.projectId)
-              : (p.idFirstService === secondObject.projectId && p.idSecondService === firstObject.projectId)
+            (p.idFirstService === firstObject.projectId && p.idSecondService === secondObject.projectId)
+              || (p.idFirstService === secondObject.projectId && p.idSecondService === firstObject.projectId)
           })
           if (areInTheProjectPair) {
-
             const mapping = new Mapping()
             mapping.primaryObjectId = firstObject.id
             mapping.primaryObjectType = firstObject.type
@@ -550,7 +555,6 @@ export class ConfigSyncJob extends SyncJob {
                 first ? this._connection.firstService.name : this._connection.secondService.name,
                 firstObject.type)
             )
-
             const secondMappingsObject =
               new MappingsObject(
                 secondObject.id,

@@ -220,14 +220,15 @@ export class RedmineSyncedService implements SyncedService {
         return false;
       }
 
-
       responseIssues.body?.issues.forEach((issue: any) => {
         const customFields = syncCustomFieldValue ? issue['custom_fields'] : null
         let custFieldValue = null
         if (Array.isArray(customFields)) {
-          custFieldValue = issue.custom_fields.find((f: any) => {
+          const custField = issue.custom_fields.find((f: any) => {
             return f.id === syncCustomFieldValue
-          }).value
+          })
+          if (custField && custField.value)
+            custFieldValue = custField.value
         }
         issues.push(
           new ServiceObject(
