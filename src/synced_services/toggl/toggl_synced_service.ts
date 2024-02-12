@@ -77,7 +77,6 @@ export class TogglTrackSyncedService implements SyncedService {
     // call request but with chained retry
     const response = await request
       .retry(2, (err, res) => {
-        console.log(`retry with res: ${res} and error ${err}`)
         if (res.status === 429) {
           // cannot wait here, since it cannot be async method (well it can, but it does not wait)
           needToWait = true;
