@@ -216,17 +216,18 @@ export class ConfigSyncJob extends SyncJob {
 
     // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
     for (const mapping of this._connection.mappings) {
-      // // delete object from secondary service because it was deleted in the primary - not working because of too many requests on Toggl
-      // const primaryObjectExists = objectsToSync.find((obj: ServiceObject) => {
-      //   obj.id === mapping.primaryObjectId
-      // })
-      // if (!primaryObjectExists) {
-      //   //delete secondary object in the service
-      //   const secondaryServiceObject = mapping.mappingsObjects[0].service === "Toggl Track" ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
-      //   //console.log(`about to delete obj from ${secondaryServiceObject.service} with Id ${secondaryServiceObject.id} and name ${secondaryServiceObject.name}`)
-      //   syncedService.deleteServiceObject(secondaryServiceObject.id, 'tag')   
-      //  //add obsolete mapping so it could be deleted
-      // }
+      // delete object from secondary service because it was deleted in the primary
+      const primaryObjectExists = objectsToSync.find((obj: ServiceObject) => {
+        return obj.id === mapping.primaryObjectId
+      })
+      if (!primaryObjectExists) {
+        //delete secondary object in the service
+        const secondaryServiceObject = mapping.mappingsObjects[0].service === "Toggl Track" ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+        //console.log(`about to delete obj from ${secondaryServiceObject.service} with Id ${secondaryServiceObject.id} and name ${secondaryServiceObject.name}`)
+
+        //We do not want to delete immediately, it will be deleted later
+        //await syncedService.deleteServiceObject(secondaryServiceObject.id, 'tag')
+      }
 
       const isObsolete = checkedMappings.find(checkedMapping => checkedMapping === mapping) === undefined;
       if (isObsolete && mapping.markedToDelete) {

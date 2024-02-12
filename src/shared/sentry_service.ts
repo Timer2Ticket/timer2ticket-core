@@ -31,7 +31,7 @@ export class SentryService {
 
     public logJiraError(uri: string, error: any, extraContext?: ExtraContext | ExtraContext[] | null): void {
         const sentryScope = new Scope()
-        sentryScope.setTag("Service", "Redmine");
+        sentryScope.setTag("Service", "Jira");
         sentryScope.setContext("Service url", { url: uri });
 
         if (extraContext) {

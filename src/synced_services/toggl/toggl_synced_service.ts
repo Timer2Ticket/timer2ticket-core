@@ -120,12 +120,14 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async deleteServiceObject(id: string | number, objectType: string): Promise<boolean> {
+    let result
     switch (objectType) {
       case this._projectsType:
-        return await this._deleteProject(id);
+        result = await this._deleteProject(id);
       default:
-        return await this._deleteTag(id);
+        result = await this._deleteTag(id);
     }
+    return result
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {
@@ -279,12 +281,17 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   private async _deleteTag(id: string | number): Promise<boolean> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .delete(`${this._tagsUri}/${id}`)
-        .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
-    );
-
+    let response
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .delete(`${this._tagsUri}/${id}`)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+      );
+    } catch (ex) {
+      this.handleResponseException(ex, 'deleteTag');
+      return false
+    }
     return response.ok;
   }
 
