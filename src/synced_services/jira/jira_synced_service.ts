@@ -149,7 +149,7 @@ export class jiraSyncedService implements SyncedService {
         }
         if (selectByState) {
             for (const ignoredState of this._ignoreIssueStates) {
-                query += ` AND status != ${ignoredState.id}`
+                query += ` AND statusCategory != ${ignoredState.id}`
             }
         }
         return query
