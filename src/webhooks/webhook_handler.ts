@@ -7,7 +7,7 @@ export class WebhookHandler {
     async handleWebhook(data: any) {
         const event: string = data.event
         const eventObject: string = data.eventObject
-        const connectionId: string = data.connections
+        const connectionId: string = data.connection
         const service: string = data.service
         const lastUpdated: number | string = data.timestamp
         if (event === "DELETED") {
@@ -48,7 +48,11 @@ export class WebhookHandler {
     }
 
     //issues
-    async _createIssue(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
+    async _createIssue(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
+        //create mapping in connection
+        //create tag in second service
+        //create TESO?
+    }
     async _updateIssue(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
     //async _deleteIssue(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
     //projects
