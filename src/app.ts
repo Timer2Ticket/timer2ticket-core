@@ -9,6 +9,9 @@ import { Constants } from './shared/constants';
 import { databaseService } from './shared/database_service';
 import { Connection } from "./models/connection/connection";
 import { ObjectId } from "mongodb";
+import { JiraTimeEntry } from './models/synced_service/time_entry/jira_time_entry';
+import { ServiceObject } from './models/synced_service/service_object/service_object';
+import { WebhookHandler } from './webhooks/webhook_handler';
 
 Sentry.init({
     dsn: Constants.sentryDsn,
@@ -199,6 +202,15 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
         return res.send('Connections updated successfully.');
     }
 });
+
+app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
+    console.log(req.body)
+    res.sendStatus(201)
+    const webhookHandler = new WebhookHandler()
+    await webhookHandler.handleWebhook(req.body)
+})
+
+
 
 async function updateConnection(connectionId: string, isCreated: boolean): Promise<number | null> {
     const configTask = activeUsersScheduledConfigSyncTasks.get(connectionId);

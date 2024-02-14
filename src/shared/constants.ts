@@ -13,5 +13,5 @@ export class Constants {
 
   static defaultWaitDurationInCaseOfTooManyRequestsInMilliseconds = 1500;
 
-  static configObjectMappingMarkedToDeleteTresholdInDays = 7;
+  static configObjectMappingMarkedToDeleteTresholdInDays = 1;
 }
