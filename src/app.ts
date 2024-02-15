@@ -204,7 +204,7 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
 });
 
 app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
-    console.log(req.body)
+    //console.log(req.body)
     res.sendStatus(201)
     const webhookHandler = new WebhookHandler()
     await webhookHandler.handleWebhook(req.body)
