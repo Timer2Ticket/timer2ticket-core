@@ -39,10 +39,10 @@ export class WebhookHandler {
             case "CREATED":
                 switch (eventObject) {
                     case "issue":
-                        await this._createIssue(connection, service, lastUpdated, newObject as ServiceObject)
+                        await this._createServiceObject(connection, service, newObject as ServiceObject)
                         break
                     case "project":
-                        await this._createProject(connection, service, lastUpdated, newObject as ServiceObject)
+                        await this._createServiceObject(connection, service, newObject as ServiceObject)
                         break
                     case "worklog":
                         await this._createTimeEntry(connection, service, lastUpdated, newObject as TimeEntry)
@@ -52,10 +52,10 @@ export class WebhookHandler {
             case "UPDATED":
                 switch (eventObject) {
                     case "issue":
-                        await this._updateIssue(connection, service, lastUpdated, newObject as ServiceObject)
+                        await this._updateServiceObject(connection, service, newObject as ServiceObject)
                         break
                     case "project":
-                        await this._updateProject(connection, service, lastUpdated, newObject as ServiceObject)
+                        await this._updateServiceObject(connection, service, newObject as ServiceObject)
                         break
                     case "worklog":
                         await this._updateTimeEntry(connection, service, lastUpdated, newObject as TimeEntry)
@@ -66,20 +66,20 @@ export class WebhookHandler {
         return true
     }
 
-    //issues
-    async _createIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
+    //issues and projects
+    async _createServiceObject(connection: Connection, service: string, newObj: ServiceObject) {
         const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._createServiceObjectInSeconadyService(connection, service, newIssue, notCallingService)
+        const secondServiceObject = await this._createServiceObjectInSeconadyService(connection, service, newObj, notCallingService)
         if (!secondServiceObject) {
             return
         }
-        const secondServiceType = notCallingService.name === 'Toggl Track' ? 'tag' : 'issue'
+        const secondServiceType = newObj.type === 'issue' ? (notCallingService.name === 'Toggl Track' ? 'tag' : 'issue') : 'project'
         //create mapping in connection
         const mapping = new Mapping()
-        mapping.primaryObjectId = newIssue.id
-        mapping.primaryObjectType = newIssue.type
-        mapping.name = newIssue.name
-        const primaryMappingObject = new MappingsObject(newIssue.id, newIssue.name, service, newIssue.type)
+        mapping.primaryObjectId = newObj.id
+        mapping.primaryObjectType = newObj.type
+        mapping.name = newObj.name
+        const primaryMappingObject = new MappingsObject(newObj.id, newObj.name, service, newObj.type)
         const secondaryMappingObject = new MappingsObject(secondServiceObject.id, secondServiceObject.name, notCallingService.name, secondServiceType)
         mapping.mappingsObjects.push(primaryMappingObject)
         mapping.mappingsObjects.push(secondaryMappingObject)
@@ -88,15 +88,17 @@ export class WebhookHandler {
         connection.mappings.push(mapping)
         await databaseService.updateConnectionMappings(connection)
     }
-    async _updateIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
+    async _updateServiceObject(connection: Connection, service: string, updatedObj: ServiceObject) {
         console.log('about to update issue')
         const mapping = connection.mappings.find((m: Mapping) => {
             //primary service called
-            return m.primaryObjectId === newIssue.id
+            return m.primaryObjectId === updatedObj.id
         })
-        if (!mapping)
+        if (!mapping) {
+            //mapping was not found, so ignore thw webhook
             return
-        if (mapping.name === newIssue.name) {
+        }
+        if (mapping.name === updatedObj.name) {
             //something else then name changed, I don't care about id
             console.log('names are the same, so no update')
             return
@@ -105,18 +107,14 @@ export class WebhookHandler {
         const secondaryServiceNumber = mapping.mappingsObjects[0].service === service ? 1 : 0
 
         const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, mapping.mappingsObjects[secondaryServiceNumber].id, newIssue, notCallingService)
+        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, mapping.mappingsObjects[secondaryServiceNumber].id, updatedObj, notCallingService)
         if (!secondServiceObject)
             return
-        mapping.name = newIssue.name
-        mapping.mappingsObjects[primaryServiceNumber].name = newIssue.name
+        mapping.name = updatedObj.name
+        mapping.mappingsObjects[primaryServiceNumber].name = updatedObj.name
         mapping.mappingsObjects[secondaryServiceNumber].name = secondServiceObject.name
         await databaseService.updateConnectionMappings(connection)
     }
-
-    //projects
-    async _createProject(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
-    async _updateProject(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
 
     //TimeEntries
     async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
