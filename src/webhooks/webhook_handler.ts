@@ -89,6 +89,7 @@ export class WebhookHandler {
         await databaseService.updateConnectionMappings(connection)
     }
     async _updateIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
+        console.log('about to update issue')
         const mapping = connection.mappings.find((m: Mapping) => {
             //primary service called
             return m.primaryObjectId === newIssue.id
@@ -97,14 +98,16 @@ export class WebhookHandler {
             return
         if (mapping.name === newIssue.name) {
             //something else then name changed, I don't care about id
+            console.log('names are the same, so no update')
             return
         }
-        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, service, newIssue, notCallingService)
-        if (!secondServiceObject)
-            return
         const primaryServiceNumber = mapping.mappingsObjects[0].service === service ? 0 : 1
         const secondaryServiceNumber = mapping.mappingsObjects[0].service === service ? 1 : 0
+
+        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
+        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, mapping.mappingsObjects[secondaryServiceNumber].id, newIssue, notCallingService)
+        if (!secondServiceObject)
+            return
         mapping.name = newIssue.name
         mapping.mappingsObjects[primaryServiceNumber].name = newIssue.name
         mapping.mappingsObjects[secondaryServiceNumber].name = secondServiceObject.name
@@ -157,12 +160,12 @@ export class WebhookHandler {
 
     }
 
-    private async _updateServiceObjectInSeconadyService(connection: Connection, service: string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
+    private async _updateServiceObjectInSeconadyService(connection: Connection, secondServiceObjectId: number | string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
         if (!this._isTicket2Ticket(connection)) {
             //create tag in second service
             const syncedService = SyncedServiceCreator.create(notCallingService)
             try {
-                return await syncedService.updateServiceObject(newObj.id, newObj)
+                return await syncedService.updateServiceObject(secondServiceObjectId, newObj)
             } catch (err) {
                 return null
             }
