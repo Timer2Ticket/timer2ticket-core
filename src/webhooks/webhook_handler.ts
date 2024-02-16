@@ -7,6 +7,7 @@ import { databaseService } from "../shared/database_service"
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator"
 import { Mapping } from "../models/connection/mapping/mapping"
 import { MappingsObject } from "../models/connection/mapping/mappings_object"
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition"
 
 export class WebhookHandler {
 
@@ -22,7 +23,7 @@ export class WebhookHandler {
         } catch (err) {
             return
         }
-        const connection = await databaseService.getConnectionById(connectionId)
+        const connection = await databaseService.getConnectionById(connectionId)//Move to calling service to avoid multiple DB calls 
         if (!connection)
             return
         const service: string = data.service
@@ -67,20 +68,8 @@ export class WebhookHandler {
 
     //issues
     async _createIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
-        console.log('about to create Issue')
         const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        let secondServiceObject
-        if (!this._isTicket2Ticket(connection)) {
-            //create tag in second service
-            const syncedService = SyncedServiceCreator.create(notCallingService)
-            try {
-                secondServiceObject = await syncedService.createServiceObject(newIssue.id, newIssue.name, newIssue.type)
-            } catch (err) {
-                return
-            }
-        } else {
-            secondServiceObject = null
-        }
+        const secondServiceObject = await this._createServiceObjectInSeconadyService(connection, service, newIssue, notCallingService)
         if (!secondServiceObject) {
             return
         }
@@ -99,16 +88,37 @@ export class WebhookHandler {
         connection.mappings.push(mapping)
         await databaseService.updateConnectionMappings(connection)
     }
-    async _updateIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
-    //async _deleteIssue(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
+    async _updateIssue(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) {
+        const mapping = connection.mappings.find((m: Mapping) => {
+            //primary service called
+            return m.primaryObjectId === newIssue.id
+        })
+        if (!mapping)
+            return
+        if (mapping.name === newIssue.name) {
+            //something else then name changed, I don't care about id
+            return
+        }
+        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
+        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, service, newIssue, notCallingService)
+        if (!secondServiceObject)
+            return
+        const primaryServiceNumber = mapping.mappingsObjects[0].service === service ? 0 : 1
+        const secondaryServiceNumber = mapping.mappingsObjects[0].service === service ? 1 : 0
+        mapping.name = newIssue.name
+        mapping.mappingsObjects[primaryServiceNumber].name = newIssue.name
+        mapping.mappingsObjects[secondaryServiceNumber].name = secondServiceObject.name
+        await databaseService.updateConnectionMappings(connection)
+    }
+
     //projects
     async _createProject(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
     async _updateProject(connection: Connection, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
-    //async _deleteProject(connectionId: string, service: string, lastUpdated: number | string, newIssue: ServiceObject) { }
+
     //TimeEntries
     async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
     async _updateTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
-    //async _deleteTimeEntry(connectionId: string, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
+    async _deleteTimeEntry(connectionId: string, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
 
 
 
@@ -130,5 +140,35 @@ export class WebhookHandler {
             (connection.secondService.name === 'Jira' || connection.secondService.name === 'Redmine'))
             return true
         else return false
+    }
+
+    private async _createServiceObjectInSeconadyService(connection: Connection, service: string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
+        if (!this._isTicket2Ticket(connection)) {
+            //create tag in second service
+            const syncedService = SyncedServiceCreator.create(notCallingService)
+            try {
+                return await syncedService.createServiceObject(newObj.id, newObj.name, newObj.type)
+            } catch (err) {
+                return null
+            }
+        } else {
+            return null
+        }
+
+    }
+
+    private async _updateServiceObjectInSeconadyService(connection: Connection, service: string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
+        if (!this._isTicket2Ticket(connection)) {
+            //create tag in second service
+            const syncedService = SyncedServiceCreator.create(notCallingService)
+            try {
+                return await syncedService.updateServiceObject(newObj.id, newObj)
+            } catch (err) {
+                return null
+            }
+        } else {
+            return null
+        }
+
     }
 }
