@@ -32,33 +32,34 @@ export class WebhookHandler {
             //deletes are ignored for now
             return
         }
-        const newObject = this._getObjectFromWebhook(service, eventObject, lastUpdated, data.newObject)
-        if (!newObject)
+        const newObject = this._getServiceObjectFromWebhook(service, eventObject, lastUpdated, data.newObject)
+        const newTE = this._getTEFromWebhook(service, eventObject, lastUpdated, data.newObject)
+        if (!newObject || (eventObject === 'worklog' && !newTE))
             return false
         switch (event) {
             case "CREATED":
                 switch (eventObject) {
                     case "issue":
-                        await this._createServiceObject(connection, service, newObject as ServiceObject)
+                        await this._createServiceObject(connection, service, newObject)
                         break
                     case "project":
-                        await this._createServiceObject(connection, service, newObject as ServiceObject)
+                        await this._createServiceObject(connection, service, newObject)
                         break
                     case "worklog":
-                        await this._createTimeEntry(connection, service, lastUpdated, newObject as TimeEntry)
+                        await this._createTimeEntry(connection, service, lastUpdated, newTE!, newObject)
                         break
                 }
                 break
             case "UPDATED":
                 switch (eventObject) {
                     case "issue":
-                        await this._updateServiceObject(connection, service, newObject as ServiceObject)
+                        await this._updateServiceObject(connection, service, newObject)
                         break
                     case "project":
-                        await this._updateServiceObject(connection, service, newObject as ServiceObject)
+                        await this._updateServiceObject(connection, service, newObject)
                         break
                     case "worklog":
-                        await this._updateTimeEntry(connection, service, lastUpdated, newObject as TimeEntry)
+                        await this._updateTimeEntry(connection, service, lastUpdated, newTE!, newObject)
                         break
                 }
                 break
@@ -117,20 +118,34 @@ export class WebhookHandler {
     }
 
     //TimeEntries
-    async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
-    async _updateTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
+    async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) {
+        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
+        const secondServiceObject = await this._createTEinSecondService(connection, service, newTE, notCallingService, serviceObject)
+        if (!secondServiceObject) {
+            return
+        }
+
+    }
+    async _updateTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) { }
     async _deleteTimeEntry(connectionId: string, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
 
 
 
-    private _getObjectFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any) {
+    private _getServiceObjectFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): ServiceObject | null {
         if (service === 'Jira') {
-            if (objType === 'worklog') {
-                //TODO this will fail on project Id
-                return new JiraTimeEntry(obj.id, obj.projectId, obj.text, new Date(obj.start), new Date(obj.end), obj.durationInMilliseconds, new Date(lastUpdated))
-            }
             if (objType === 'issue' || objType === 'project') {
                 return new ServiceObject(obj.id, obj.name, obj.type)
+            }
+        }
+        return null
+    }
+    private _getTEFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): TimeEntry | null {
+        if (!obj.timeEntry)
+            return null
+        const timeEntry = obj.timeEntry
+        if (service === 'Jira') {
+            if (objType === 'worklog') {
+                return new JiraTimeEntry(timeEntry.id, timeEntry.projectId, timeEntry.text, new Date(timeEntry.start), new Date(timeEntry.end), timeEntry.durationInMilliseconds, new Date(lastUpdated))
             }
         }
         return null
@@ -171,5 +186,22 @@ export class WebhookHandler {
             return null
         }
 
+    }
+
+    private async _createTEinSecondService(connection: Connection, service: string, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
+        if (!this._isTicket2Ticket(connection)) {
+            const syncedService = SyncedServiceCreator.create(notCallingService)
+            const start = new Date(newTE.start)
+            const end = new Date(newTE.end)
+            if (!start || !end)
+                return null
+            try {
+                return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, [serviceObject])
+            } catch (err) {
+                return null
+            }
+        } else {
+            return null
+        }
     }
 }
