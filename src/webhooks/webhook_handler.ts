@@ -8,6 +8,8 @@ import { SyncedServiceCreator } from "../synced_services/synced_service_creator"
 import { Mapping } from "../models/connection/mapping/mapping"
 import { MappingsObject } from "../models/connection/mapping/mappings_object"
 import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition"
+import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synced_object/time_entry_synced_object"
+import { ServiceTimeEntryObject } from "../models/synced_service/time_entry_synced_object/service_time_entry_object"
 
 export class WebhookHandler {
 
@@ -32,8 +34,9 @@ export class WebhookHandler {
             //deletes are ignored for now
             return
         }
-        const newObject = this._getServiceObjectFromWebhook(service, eventObject, lastUpdated, data.newObject)
-        const newTE = this._getTEFromWebhook(service, eventObject, lastUpdated, data.newObject)
+
+        const newObject = this._getServiceObjectFromWebhook(service, eventObject, lastUpdated, data.serviceObject)
+        const newTE = this._getTEFromWebhook(service, eventObject, lastUpdated, data.serviceObject)
         if (!newObject || (eventObject === 'worklog' && !newTE))
             return false
         switch (event) {
@@ -119,12 +122,20 @@ export class WebhookHandler {
 
     //TimeEntries
     async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) {
+        console.log('about to create TE')
         const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
         const secondServiceObject = await this._createTEinSecondService(connection, service, newTE, notCallingService, serviceObject)
         if (!secondServiceObject) {
             return
         }
+        //  const secondServiceObject = new ServiceObject(1, 'ahoj', 'tag', 10)
+        const STEOorigin = new ServiceTimeEntryObject(serviceObject.id, service, true)
+        const STEOsecond = new ServiceTimeEntryObject(secondServiceObject.id, notCallingService.name, false)
+        const TESO = new TimeEntrySyncedObject(connection._id, newTE.start)
+        TESO.serviceTimeEntryObjects.push(STEOorigin)
+        TESO.serviceTimeEntryObjects.push(STEOsecond)
 
+        databaseService.createTimeEntrySyncedObject(TESO);
     }
     async _updateTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) { }
     async _deleteTimeEntry(connectionId: string, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
@@ -133,13 +144,12 @@ export class WebhookHandler {
 
     private _getServiceObjectFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): ServiceObject | null {
         if (service === 'Jira') {
-            if (objType === 'issue' || objType === 'project') {
-                return new ServiceObject(obj.id, obj.name, obj.type)
-            }
+            return new ServiceObject(obj.id, obj.name, obj.type, obj.projectId)
         }
         return null
     }
     private _getTEFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): TimeEntry | null {
+        console.log('about to get obj from TE')
         if (!obj.timeEntry)
             return null
         const timeEntry = obj.timeEntry
@@ -189,14 +199,35 @@ export class WebhookHandler {
     }
 
     private async _createTEinSecondService(connection: Connection, service: string, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
+        console.log('abaut to crate TE in second service')
         if (!this._isTicket2Ticket(connection)) {
             const syncedService = SyncedServiceCreator.create(notCallingService)
             const start = new Date(newTE.start)
             const end = new Date(newTE.end)
+            const additionalData: ServiceObject[] = []
+            connection.mappings.forEach((mapping: Mapping) => {
+                let secondaryMappingObject = null
+                if (mapping.primaryObjectId === serviceObject.id) { //issues
+                    secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.id
+                        ? mapping.mappingsObjects[1]
+                        : mapping.mappingsObjects[0]
+                } else if (mapping.primaryObjectId === serviceObject.projectId) { //projects
+                    secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.projectId
+                        ? mapping.mappingsObjects[1]
+                        : mapping.mappingsObjects[0]
+                }
+                if (secondaryMappingObject) {
+                    additionalData.push(
+                        new ServiceObject(secondaryMappingObject.id,
+                            secondaryMappingObject.name,
+                            secondaryMappingObject.type)
+                    )
+                }
+            })
             if (!start || !end)
                 return null
             try {
-                return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, [serviceObject])
+                return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, additionalData)
             } catch (err) {
                 return null
             }
