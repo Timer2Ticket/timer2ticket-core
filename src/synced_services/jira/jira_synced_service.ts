@@ -1,5 +1,6 @@
 import { IssueState } from "../../models/connection/config/issue_state";
 import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
+import { WebhookEventData } from "../../models/connection/config/webhook_event_data";
 import { Connection } from "../../models/connection/connection";
 import { Mapping } from "../../models/connection/mapping/mapping";
 import { MappingsObject } from "../../models/connection/mapping/mappings_object";
@@ -466,6 +467,52 @@ export class jiraSyncedService implements SyncedService {
             return 0
         }
         return response.body.id
+    }
+
+    async getObjectsFromWebhook(webhookObject: WebhookEventData): Promise<[ServiceObject, TimeEntry | null] | null> {
+        const requestId = webhookObject.type === 'worklog' ? this._issueIdFromTimeEntryId(webhookObject.id) : webhookObject.id
+        const type = webhookObject.type === this._projectsType ? this._projectsType : this._issuesType
+        const uri = type === this._projectsType ? this._projectUri : this._issueUri
+        let response
+        try {
+            response = await superagent
+                .get(`${uri}/${requestId}`)
+                .set('Authorization', `Basic ${this._secret}`)
+                .accept('application/json')
+        } catch (ex: any) {
+            this.handleResponseException(ex, `getting issueOr Project with id ${requestId} failed`, `${uri}/`)
+            return null
+        }
+        let serviceObject
+        try {
+            serviceObject = type === this._projectsType
+                ? new ServiceObject(response.body.id, response.body.name, type)
+                : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.project.id)
+        } catch (ex: any) {
+            return null
+        }
+        let timeEntry = null
+        if (webhookObject.type === 'worklog') {
+            const worklogs = response.body.fileds.worklog.worklogs
+            const worklogId = this._worklogIdFromTimeEntryId(webhookObject.id)
+            const worklog = worklogs.find((w: any) => {
+                return w.id == worklogId
+            })
+            if (!worklog)
+                return null
+            const start = new Date(worklog.started)
+            const durationInMiliseconds = worklog.timeSpentSeconds * 1000
+            timeEntry = new JiraTimeEntry(
+                this._createTimeEntryId(response.body.id, worklog.id),
+                response.body.fields.project.id,
+                this._getcommentOfWorklog(worklog),
+                start,
+                this._calculateEndfromStartAndDuration(start, durationInMiliseconds),
+                durationInMiliseconds,
+                new Date(worklog.updated)
+            )
+        }
+        return [serviceObject, timeEntry]
     }
 
     private _getcommentOfWorklog(worklog: any): string {

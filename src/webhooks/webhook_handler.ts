@@ -10,91 +10,98 @@ import { MappingsObject } from "../models/connection/mapping/mappings_object"
 import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition"
 import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synced_object/time_entry_synced_object"
 import { ServiceTimeEntryObject } from "../models/synced_service/time_entry_synced_object/service_time_entry_object"
+import { WebhookEventData } from "../models/connection/config/webhook_event_data"
+import { jiraSyncedService } from "../synced_services/jira/jira_synced_service"
+import { SyncedService } from "../synced_services/synced_service"
 
 export class WebhookHandler {
+    data: WebhookEventData
+    connection: Connection
+    serviceObject?: ServiceObject
+    timeEntry?: TimeEntry
 
-    async handleWebhook(data: any) {
+    constructor(data: WebhookEventData, connection: Connection) {
+        this.data = data
+        this.connection = connection
+    }
+
+
+
+    async handleWebhook(): Promise<boolean> {
         console.log('about to handle webhook')
-        const event: string = data.event
-        const eventObject: string = data.eventObject
 
-        let connectionId: ObjectId
-
-        try {
-            connectionId = new ObjectId(data.connection)
-        } catch (err) {
-            return
-        }
-        const connection = await databaseService.getConnectionById(connectionId)//Move to calling service to avoid multiple DB calls 
-        if (!connection)
-            return
-        const service: string = data.service
-        const lastUpdated: number | string = data.timestamp
-        if (event === "DELETED") {
-            //deletes are ignored for now
-            return
-        }
-
-        const newObject = this._getServiceObjectFromWebhook(service, eventObject, lastUpdated, data.serviceObject)
-        const newTE = this._getTEFromWebhook(service, eventObject, lastUpdated, data.serviceObject)
-        if (!newObject || (eventObject === 'worklog' && !newTE))
+        //TODO do for more then just Jira
+        const syncedService = SyncedServiceCreator.create(this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService) as jiraSyncedService
+        const dataFromService = this._getDataFromRemote(syncedService)
+        if (!dataFromService) {
             return false
-        switch (event) {
+        }
+        if (!this.serviceObject || (this.data.type === 'worklog' && !this.timeEntry))
+            return false
+        switch (this.data.event) {
             case "CREATED":
-                switch (eventObject) {
+                switch (this.data.type) {
                     case "issue":
-                        await this._createServiceObject(connection, service, newObject)
+                        await this._createServiceObject()
                         break
                     case "project":
-                        await this._createServiceObject(connection, service, newObject)
+                        await this._createServiceObject()
                         break
                     case "worklog":
-                        await this._createTimeEntry(connection, service, lastUpdated, newTE!, newObject)
+                        await this._createTimeEntry()
                         break
                 }
                 break
             case "UPDATED":
-                switch (eventObject) {
+                switch (this.data.type) {
                     case "issue":
-                        await this._updateServiceObject(connection, service, newObject)
+                        await this._updateServiceObject()
                         break
                     case "project":
-                        await this._updateServiceObject(connection, service, newObject)
+                        await this._updateServiceObject()
                         break
-                    case "worklog":
-                        await this._updateTimeEntry(connection, service, lastUpdated, newTE!, newObject)
-                        break
+                    // case "worklog":
+                    //     await this._updateTimeEntry(connection, service, lastUpdated, newTE!, newObject)
+                    //     break
                 }
                 break
+            case "DELETED":
+                switch (this.data.type) {
+                    case "woklog":
+                        await this._deleteTimeEntry()
+                }
         }
         return true
     }
 
     //issues and projects
-    async _createServiceObject(connection: Connection, service: string, newObj: ServiceObject) {
-        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._createServiceObjectInSeconadyService(connection, service, newObj, notCallingService)
+    async _createServiceObject() {
+        const newObj = this.serviceObject!
+        const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
+        const secondServiceObject = await this._createServiceObjectInSeconadyService(this.connection, newObj, notCallingService)
         if (!secondServiceObject) {
             return
         }
-        const secondServiceType = newObj.type === 'issue' ? (notCallingService.name === 'Toggl Track' ? 'tag' : 'issue') : 'project'
+        const secondServiceType = this.data.type === 'issue' ? (notCallingService.name === 'Toggl Track' ? 'tag' : 'issue') : 'project'
         //create mapping in connection
         const mapping = new Mapping()
         mapping.primaryObjectId = newObj.id
         mapping.primaryObjectType = newObj.type
         mapping.name = newObj.name
-        const primaryMappingObject = new MappingsObject(newObj.id, newObj.name, service, newObj.type)
+        const serviceName = this.data.serviceNumber === 2 ? this.connection.secondService.name : this.connection.firstService.name
+        const primaryMappingObject = new MappingsObject(newObj.id, newObj.name, serviceName, newObj.type)
         const secondaryMappingObject = new MappingsObject(secondServiceObject.id, secondServiceObject.name, notCallingService.name, secondServiceType)
         mapping.mappingsObjects.push(primaryMappingObject)
         mapping.mappingsObjects.push(secondaryMappingObject)
         //save mapping to DB
         //console.log(mapping)
-        connection.mappings.push(mapping)
-        await databaseService.updateConnectionMappings(connection)
+        this.connection.mappings.push(mapping)
+        //await databaseService.updateConnectionMappings(this.connection)
     }
-    async _updateServiceObject(connection: Connection, service: string, updatedObj: ServiceObject) {
+    async _updateServiceObject() {
         console.log('about to update issue')
-        const mapping = connection.mappings.find((m: Mapping) => {
+        const updatedObj = this.serviceObject!
+        const mapping = this.connection.mappings.find((m: Mapping) => {
             //primary service called
             return m.primaryObjectId === updatedObj.id
         })
@@ -107,58 +114,71 @@ export class WebhookHandler {
             console.log('names are the same, so no update')
             return
         }
-        const primaryServiceNumber = mapping.mappingsObjects[0].service === service ? 0 : 1
-        const secondaryServiceNumber = mapping.mappingsObjects[0].service === service ? 1 : 0
+        const primaryServiceMappingObject = mapping.mappingsObjects[0].id === this.data.id ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+        const secondaryServiceMappingObject = mapping.mappingsObjects[0].id === this.data.id ? mapping.mappingsObjects[1] : mapping.mappingsObjects[0]
 
-        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._updateServiceObjectInSeconadyService(connection, mapping.mappingsObjects[secondaryServiceNumber].id, updatedObj, notCallingService)
+        const notCallingService = this.data.serviceNumber === 2 ? this.connection.secondService : this.connection.firstService
+        const secondServiceObject = await this._updateServiceObjectInSeconadyService(this.connection, secondaryServiceMappingObject.id, updatedObj, notCallingService)
         if (!secondServiceObject)
             return
         mapping.name = updatedObj.name
-        mapping.mappingsObjects[primaryServiceNumber].name = updatedObj.name
-        mapping.mappingsObjects[secondaryServiceNumber].name = secondServiceObject.name
-        await databaseService.updateConnectionMappings(connection)
+        primaryServiceMappingObject.name = updatedObj.name
+        secondaryServiceMappingObject.name = secondServiceObject.name
+        //await databaseService.updateConnectionMappings(this.connection)
     }
 
     //TimeEntries
-    async _createTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) {
+    async _createTimeEntry() {
         console.log('about to create TE')
-        const notCallingService = connection.firstService.name === service ? connection.secondService : connection.firstService
-        const secondServiceObject = await this._createTEinSecondService(connection, service, newTE, notCallingService, serviceObject)
+        const newTE = this.timeEntry!
+        const serviceObject = this.serviceObject!
+        const serviceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
+        const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
+        const secondServiceObject = await this._createTEInSecondService(this.connection, newTE, notCallingService, serviceObject)
         if (!secondServiceObject) {
             return
         }
         //  const secondServiceObject = new ServiceObject(1, 'ahoj', 'tag', 10)
-        const STEOorigin = new ServiceTimeEntryObject(serviceObject.id, service, true)
+        const STEOorigin = new ServiceTimeEntryObject(serviceObject.id, serviceName, true)
         const STEOsecond = new ServiceTimeEntryObject(secondServiceObject.id, notCallingService.name, false)
-        const TESO = new TimeEntrySyncedObject(connection._id, newTE.start)
+        const TESO = new TimeEntrySyncedObject(this.connection._id, newTE.start)
         TESO.serviceTimeEntryObjects.push(STEOorigin)
         TESO.serviceTimeEntryObjects.push(STEOsecond)
 
-        databaseService.createTimeEntrySyncedObject(TESO);
+        //await databaseService.createTimeEntrySyncedObject(TESO);
     }
-    async _updateTimeEntry(connection: Connection, service: string, lastUpdated: number | string, newTE: TimeEntry, serviceObject: ServiceObject) { }
-    async _deleteTimeEntry(connectionId: string, service: string, lastUpdated: number | string, newTE: TimeEntry) { }
+    //async _updateTimeEntry() { }
+    async _deleteTimeEntry() {
+        console.log('about to delete Time Entry')
+        //find TESO by ID of calling TE ID
+        const TESOsOfConnection = await databaseService.getTimeEntrySyncedObjects(this.connection)
+        if (!TESOsOfConnection)
+            return
+        const TESO2Delete = TESOsOfConnection.find((te: TimeEntrySyncedObject) => {
+            return te.serviceTimeEntryObjects[0].id === this.data.id || te.serviceTimeEntryObjects[1].id === this.data.id
+        })
+        if (!TESO2Delete)
+            return
+        //delete TE in second service
+        //TODO
 
-
-
-    private _getServiceObjectFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): ServiceObject | null {
-        if (service === 'Jira') {
-            return new ServiceObject(obj.id, obj.name, obj.type, obj.projectId)
-        }
-        return null
+        //delete TESO
+        //await databaseService.deleteTimeEntrySyncedObject(TESO2Delete)
     }
-    private _getTEFromWebhook(service: string, objType: string, lastUpdated: number | string, obj: any): TimeEntry | null {
-        console.log('about to get obj from TE')
-        if (!obj.timeEntry)
-            return null
-        const timeEntry = obj.timeEntry
+
+
+
+    private async _getDataFromRemote(syncedService: SyncedService): Promise<boolean> {
+        const service = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
         if (service === 'Jira') {
-            if (objType === 'worklog') {
-                return new JiraTimeEntry(timeEntry.id, timeEntry.projectId, timeEntry.text, new Date(timeEntry.start), new Date(timeEntry.end), timeEntry.durationInMilliseconds, new Date(lastUpdated))
-            }
+            const jiraSyncedService = syncedService as jiraSyncedService
+            const serviceObjectTupple = await jiraSyncedService.getObjectsFromWebhook(this.data)
+            if (!serviceObjectTupple || !serviceObjectTupple[1])
+                return false
+            this.serviceObject = serviceObjectTupple[0]
+            this.timeEntry = serviceObjectTupple[1]
         }
-        return null
+        return true
     }
 
     private _isTicket2Ticket(connection: Connection): boolean {
@@ -168,7 +188,7 @@ export class WebhookHandler {
         else return false
     }
 
-    private async _createServiceObjectInSeconadyService(connection: Connection, service: string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
+    private async _createServiceObjectInSeconadyService(connection: Connection, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
         if (!this._isTicket2Ticket(connection)) {
             //create tag in second service
             const syncedService = SyncedServiceCreator.create(notCallingService)
@@ -198,7 +218,7 @@ export class WebhookHandler {
 
     }
 
-    private async _createTEinSecondService(connection: Connection, service: string, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
+    private async _createTEInSecondService(connection: Connection, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
         console.log('abaut to crate TE in second service')
         if (!this._isTicket2Ticket(connection)) {
             const syncedService = SyncedServiceCreator.create(notCallingService)

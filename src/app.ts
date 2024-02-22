@@ -12,6 +12,7 @@ import { ObjectId } from "mongodb";
 import { JiraTimeEntry } from './models/synced_service/time_entry/jira_time_entry';
 import { ServiceObject } from './models/synced_service/service_object/service_object';
 import { WebhookHandler } from './webhooks/webhook_handler';
+import { WebhookEventData } from './models/connection/config/webhook_event_data';
 
 Sentry.init({
     dsn: Constants.sentryDsn,
@@ -206,8 +207,20 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
 app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
     //console.log(req.body)
     res.sendStatus(201)
-    const webhookHandler = new WebhookHandler()
-    await webhookHandler.handleWebhook(req.body)
+    let webhookEventData
+    try {
+        webhookEventData = new WebhookEventData(req.body.type, req.body.id, req.body.event, req.body.timestamp, req.body.connectionId, req.body.serviceNumber)
+    } catch (err: any) {
+        console.log('was not able to create webhookEvent')
+        console.log(req.body)
+        return
+    }
+    const connection = await databaseService.getConnectionById(webhookEventData.connectionId)
+    if (!connection)
+        return
+
+    const webhookHandler = new WebhookHandler(webhookEventData, connection)
+    await webhookHandler.handleWebhook()
 })
 
 
