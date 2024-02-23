@@ -205,11 +205,10 @@ app.post('/api/v2/update/', async (req: Request, res: Response) => {
 });
 
 app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
-    //console.log(req.body)
-    res.sendStatus(201)
+    res.sendStatus(200)
     let webhookEventData
     try {
-        webhookEventData = new WebhookEventData(req.body.type, req.body.id, req.body.event, req.body.timestamp, req.body.connectionId, req.body.serviceNumber)
+        webhookEventData = new WebhookEventData(req.body.type, req.body.id, req.body.event, req.body.timestamp, new ObjectId(req.body.connectionId), req.body.serviceNumber)
     } catch (err: any) {
         console.log('was not able to create webhookEvent')
         console.log(req.body)
@@ -218,7 +217,6 @@ app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
     const connection = await databaseService.getConnectionById(webhookEventData.connectionId)
     if (!connection)
         return
-
     const webhookHandler = new WebhookHandler(webhookEventData, connection)
     await webhookHandler.handleWebhook()
 })

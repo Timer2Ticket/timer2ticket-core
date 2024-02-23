@@ -480,20 +480,22 @@ export class jiraSyncedService implements SyncedService {
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
         } catch (ex: any) {
-            this.handleResponseException(ex, `getting issueOr Project with id ${requestId} failed`, `${uri}/`)
+            //this.handleResponseException(ex, `getting issueOr Project with id ${requestId} failed`, `${uri}/`)
             return null
         }
         let serviceObject
+        // console.log(response.body)
         try {
             serviceObject = type === this._projectsType
                 ? new ServiceObject(response.body.id, response.body.name, type)
-                : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.project.id)
+                : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.fields.project.id)
         } catch (ex: any) {
+            // console.log('failed to build ServiceObject', ex)
             return null
         }
         let timeEntry = null
         if (webhookObject.type === 'worklog') {
-            const worklogs = response.body.fileds.worklog.worklogs
+            const worklogs = response.body.fields.worklog.worklogs
             const worklogId = this._worklogIdFromTimeEntryId(webhookObject.id)
             const worklog = worklogs.find((w: any) => {
                 return w.id == worklogId
