@@ -210,8 +210,6 @@ app.post('/api/v2/webhooks', async (req: Request, res: Response) => {
     try {
         webhookEventData = new WebhookEventData(req.body.type, req.body.id, req.body.event, req.body.timestamp, new ObjectId(req.body.connectionId), req.body.serviceNumber)
     } catch (err: any) {
-        console.log('was not able to create webhookEvent')
-        console.log(req.body)
         return
     }
     const connection = await databaseService.getConnectionById(webhookEventData.connectionId)

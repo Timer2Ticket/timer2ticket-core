@@ -608,6 +608,19 @@ export class ConfigSyncJob extends SyncJob {
         success = false
       }
     }
+    //delete from service
+    const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
+    const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
+    mappingsToDelete.forEach(mapping => {
+      const secondaryMappingObject = mapping.mappingsObjects[0].id === mapping.primaryObjectId ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+      const syncedService = secondaryMappingObject.name === this._connection.firstService.name ? firstSyncedService : secondSyncedService
+      try {
+        syncedService.deleteServiceObject(secondaryMappingObject.id, secondaryMappingObject.type)
+      } catch (ex) {
+        //this can fail in case wrong service is called. (Jira and Redmine do not supprot deleting objects)
+      }
+    })
+
     //remove Mappings from this.connection...mappings
     this._connection.mappings
       = this._connection
