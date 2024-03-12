@@ -14,6 +14,7 @@ import { WebhookEventData } from "../models/connection/config/webhook_event_data
 import { jiraSyncedService } from "../synced_services/jira/jira_synced_service"
 import { SyncedService } from "../synced_services/synced_service"
 import { setContext } from "@sentry/node"
+import { getIdOfAnotherServiceIdFromLink, isTicket2TicketConnection } from "../shared/ticket2ticket_service"
 
 export class WebhookHandler {
     data: WebhookEventData
@@ -80,8 +81,13 @@ export class WebhookHandler {
     //issues and projects
     private async _createServiceObject() {
         const newObj = this.serviceObject!
+        let secondServiceObject
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
-        const secondServiceObject = await this._createServiceObjectInSeconadyService(this.connection, newObj, notCallingService)
+        if (this._isTicket2Ticket(this.connection)) {
+            secondServiceObject = await this._getIssueForTicket2TicketMapping(this.connection, notCallingService)
+        } else {
+            secondServiceObject = await this._createServiceObjectInSeconadyService(this.connection, newObj, notCallingService)
+        }
         if (!secondServiceObject) {
             return
         }
@@ -109,8 +115,13 @@ export class WebhookHandler {
             return m.primaryObjectId === updatedObj.id
         })
         if (!mapping) {
-            //mapping was not found, so ignore thw webhook
-            return
+            //mapping was not found, ignore for Timer2Ticket Connection, but try to create one for Ticket2Ticket
+            if (!isTicket2TicketConnection(this.connection))
+                return
+            else {
+                this._createServiceObject()
+                return
+            }
         }
         if (mapping.name === updatedObj.name) {
             //something else then name changed, I don't care about id
@@ -230,7 +241,7 @@ export class WebhookHandler {
         return true
     }
 
-    private _isTicket2Ticket(connection: Connection): boolean {
+    private _isTicket2Ticket(connection: Connection): boolean { //TODO remove
         if ((connection.firstService.name === 'Jira' || connection.firstService.name === 'Redmine') &&
             (connection.secondService.name === 'Jira' || connection.secondService.name === 'Redmine'))
             return true
@@ -250,6 +261,29 @@ export class WebhookHandler {
             return null
         }
 
+    }
+
+    private async _getIssueForTicket2TicketMapping(connection: Connection, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
+        if (this._isTicket2Ticket(connection)) {
+            const syncedService = SyncedServiceCreator.create(notCallingService)
+            const customField = this.data.serviceNumber ? connection.secondService.config.customField?.id : connection.firstService.config.customField?.id
+            if (!customField)
+                return null
+            let serviceObjects
+            try {
+                serviceObjects = await syncedService.getAllServiceObjects(customField)
+            } catch (err) {
+                return null
+            }
+            if (!serviceObjects || serviceObjects === true)
+                return null
+            const foundObject = await serviceObjects.find(async (o: ServiceObject) => {
+                const id = await getIdOfAnotherServiceIdFromLink(notCallingService, o.syncCustomFieldValue)
+                return id === this.data.id
+            })
+            return foundObject ? foundObject : null
+        }
+        else return null
     }
 
     private async _updateServiceObjectInSeconadyService(connection: Connection, secondServiceObjectId: number | string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
