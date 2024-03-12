@@ -14,6 +14,7 @@ import { SyncedServiceDefinition } from "../models/connection/config/synced_serv
 import { ProjectMapping } from "../models/connection/mapping/project_mapping";
 import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
+import { getIdOfAnotherServiceIdFromLink } from "../shared/ticket2ticket_service";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -509,31 +510,10 @@ export class ConfigSyncJob extends SyncJob {
     return newMappings
   }
 
-  private async _getIdOfAnotherServiceIdFromLink(service: SyncedServiceDefinition, customFieldValue: string | number | null): Promise<string | number | null> {
-    if (customFieldValue && service.name === 'Jira') {
-      //issue key is used in jira link, need to extract it and get key via API request
-      const splitedValue = customFieldValue.toString().split('/')
-      const issueKey = splitedValue[splitedValue.length - 1]
-      const syncedService = new jiraSyncedService(service)
-      const issueId = await syncedService.getIssueIdFromIssueKey(issueKey)
-      if (issueId)
-        return issueId
-      else
-        return null
-    } else if (customFieldValue && service.name === 'Redmine') {
-      const splitedValue = customFieldValue.toString().split('/')
-      const idPlusQuery = splitedValue[splitedValue.length - 1]
-      const issueId = idPlusQuery.split('?')[0]
-      return issueId
-    } else {
-      return null
-    }
-  }
-
   private async _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjectsWithCustField: ServiceObject[], first: boolean): Promise<Mapping[]> {
     const newMappings: Mapping[] = new Array()
     for (const secondObject of secondServiceObjectsWithCustField) {
-      const idOfFirst = await this._getIdOfAnotherServiceIdFromLink(first ? this._connection.firstService : this._connection.secondService, secondObject.syncCustomFieldValue)
+      const idOfFirst = await getIdOfAnotherServiceIdFromLink(first ? this._connection.firstService : this._connection.secondService, secondObject.syncCustomFieldValue)
       if (idOfFirst) {//'second objects has link to the first => first is primary
         const firstObject = firstServiceObjects.find((o: ServiceObject) => {
           return o.id == idOfFirst
