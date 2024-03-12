@@ -13,6 +13,7 @@ import { ServiceTimeEntryObject } from "../models/synced_service/time_entry_sync
 import { WebhookEventData } from "../models/connection/config/webhook_event_data"
 import { jiraSyncedService } from "../synced_services/jira/jira_synced_service"
 import { SyncedService } from "../synced_services/synced_service"
+import { setContext } from "@sentry/node"
 
 export class WebhookHandler {
     data: WebhookEventData
@@ -31,7 +32,7 @@ export class WebhookHandler {
         console.log('about to handle webhook')
 
         //TODO do for more then just Jira
-        const syncedService = SyncedServiceCreator.create(this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService) as jiraSyncedService
+        const syncedService = SyncedServiceCreator.create(this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService)
         const dataFromService = await this._getDataFromRemote(syncedService)
         if (!dataFromService) {
             return false
@@ -61,22 +62,23 @@ export class WebhookHandler {
                     case "project":
                         await this._updateServiceObject()
                         break
-                    // case "worklog":
-                    //     await this._updateTimeEntry(connection, service, lastUpdated, newTE!, newObject)
-                    //     break
+                    case "worklog":
+                        await this._updateTimeEntry()
+                        break
                 }
                 break
             case "DELETED":
                 switch (this.data.type) {
                     case "woklog":
-                    //await this._deleteTimeEntry()
+                        await this._deleteTimeEntry()
+                        break
                 }
         }
         return true
     }
 
     //issues and projects
-    async _createServiceObject() {
+    private async _createServiceObject() {
         const newObj = this.serviceObject!
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
         const secondServiceObject = await this._createServiceObjectInSeconadyService(this.connection, newObj, notCallingService)
@@ -99,7 +101,7 @@ export class WebhookHandler {
         this.connection.mappings.push(mapping)
         await databaseService.updateConnectionMappings(this.connection)
     }
-    async _updateServiceObject() {
+    private async _updateServiceObject() {
         console.log('about to update issue')
         const updatedObj = this.serviceObject!
         const mapping = this.connection.mappings.find((m: Mapping) => {
@@ -129,7 +131,7 @@ export class WebhookHandler {
     }
 
     //TimeEntries
-    async _createTimeEntry() {
+    private async _createTimeEntry() {
         console.log('about to create TE')
         const newTE = this.timeEntry!
         const serviceObject = this.serviceObject!
@@ -149,8 +151,41 @@ export class WebhookHandler {
         await databaseService.createTimeEntrySyncedObject(TESO);
         // console.log('TE Created')
     }
-    //async _updateTimeEntry() { }
-    async _deleteTimeEntry() {
+    private async _updateTimeEntry() {
+        console.log('about to update TE')
+        const TESOsOfConnection = await databaseService.getTimeEntrySyncedObjects(this.connection)
+        if (!TESOsOfConnection)
+            return
+        const TESO2Update = TESOsOfConnection.find((te: TimeEntrySyncedObject) => {
+            return te.serviceTimeEntryObjects[0].id === this.data.id || te.serviceTimeEntryObjects[1].id === this.data.id
+        })
+        if (!TESO2Update) {
+            this._createTimeEntry()
+            return
+        } else {
+            const callingServiceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
+            const updatedTE = this.timeEntry!
+            const serviceObject = this.serviceObject!
+            const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
+            if (!(TESO2Update.serviceTimeEntryObjects[0].isOrigin && TESO2Update.serviceTimeEntryObjects[0].service === callingServiceName) ||
+                !(TESO2Update.serviceTimeEntryObjects[1].isOrigin && TESO2Update.serviceTimeEntryObjects[1].service === callingServiceName)) {
+                return
+            }
+            const secondServiceObject = await this._updateTEInSecondService(this.connection, updatedTE, notCallingService, serviceObject)
+            if (!secondServiceObject) {
+                return
+            }
+            const newSTEO = new ServiceTimeEntryObject(secondServiceObject.id, notCallingService.name, false)
+            const STEOIndex = TESO2Update.serviceTimeEntryObjects[0].id === secondServiceObject.id ? 0 : 1
+            TESO2Update.serviceTimeEntryObjects[STEOIndex] = newSTEO
+            TESO2Update.lastUpdated = Date.now()
+            await databaseService.updateTimeEntrySyncedObject(TESO2Update)
+        }
+    }
+
+
+
+    private async _deleteTimeEntry() {
         console.log('about to delete Time Entry')
         //find TESO by ID of calling TE ID
         const TESOsOfConnection = await databaseService.getTimeEntrySyncedObjects(this.connection)
@@ -161,12 +196,18 @@ export class WebhookHandler {
         })
         if (!TESO2Delete)
             return
+        //check if TE was deleted in source service
+        const callingServiceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
+        if (!(TESO2Delete.serviceTimeEntryObjects[0].isOrigin && TESO2Delete.serviceTimeEntryObjects[0].service === callingServiceName) ||
+            !(TESO2Delete.serviceTimeEntryObjects[1].isOrigin && TESO2Delete.serviceTimeEntryObjects[1].service === callingServiceName)) {
+            return
+        }
         //delete TE in second service
-        //TODO
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
-        const result = await this._deleteTEInSecondService(this.connection, this.data.id, notCallingService)
+        const result = await this._deleteTEInSecondService(this.data.id, notCallingService)
         //delete TESO
-        //await databaseService.deleteTimeEntrySyncedObject(TESO2Delete)
+        if (result)
+            await databaseService.deleteTimeEntrySyncedObject(TESO2Delete)
     }
 
 
@@ -267,12 +308,22 @@ export class WebhookHandler {
         }
     }
 
-    private async _deleteTEInSecondService(connection: Connection, TEid: number | string, secondService: SyncedServiceDefinition): Promise<boolean> {
+    private async _deleteTEInSecondService(TEid: number | string, secondService: SyncedServiceDefinition): Promise<boolean> {
         const syncedService = SyncedServiceCreator.create(secondService)
         const deleted = await syncedService.deleteTimeEntry(TEid)
         if (deleted)
             return true
         else
             return false
+    }
+
+    private async _updateTEInSecondService(connection: Connection, updatedTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
+        console.log('about to update te in second service')
+        //first delete and then create new, because of permisions
+        const deleted = await this._deleteTEInSecondService(this.data.id, notCallingService)
+        const newTE = await this._createTEInSecondService(connection, updatedTE, notCallingService, serviceObject)
+        if (!newTE)
+            return null
+        return newTE
     }
 }
