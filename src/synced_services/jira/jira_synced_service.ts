@@ -469,7 +469,7 @@ export class jiraSyncedService implements SyncedService {
         return response.body.id
     }
 
-    async getObjectsFromWebhook(webhookObject: WebhookEventData): Promise<[ServiceObject, TimeEntry | null] | null> {
+    async getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null> {
         const requestId = webhookObject.type === 'worklog' ? this._issueIdFromTimeEntryId(webhookObject.id) : webhookObject.id
         const type = webhookObject.type === this._projectsType ? this._projectsType : this._issuesType
         const uri = type === this._projectsType ? this._projectUri : this._issueUri
@@ -488,7 +488,7 @@ export class jiraSyncedService implements SyncedService {
         try {
             serviceObject = type === this._projectsType
                 ? new ServiceObject(response.body.id, response.body.name, type)
-                : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.fields.project.id)
+                : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.fields.project.id, syncCustomField ? response.body.fields[syncCustomField] : null)
         } catch (ex: any) {
             // console.log('failed to build ServiceObject', ex)
             return null
