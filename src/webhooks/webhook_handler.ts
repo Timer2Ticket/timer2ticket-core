@@ -89,7 +89,6 @@ export class WebhookHandler {
         if (!secondServiceObject) {
             return
         }
-        console.log(secondServiceObject)
         const secondServiceType = this.data.type === 'issue' ? (notCallingService.name === 'Toggl Track' ? 'tag' : 'issue') : 'project'
         //create mapping in connection
         const mapping = new Mapping()
@@ -105,8 +104,6 @@ export class WebhookHandler {
         //console.log(mapping)
         this.connection.mappings.push(mapping)
         await databaseService.updateConnectionMappings(this.connection)
-        console.log('mapping created')
-        console.log(mapping)
     }
     private async _updateServiceObject() {
         console.log('about to update issue')
@@ -120,13 +117,12 @@ export class WebhookHandler {
             if (!isTicket2TicketConnection(this.connection))
                 return
             else {
-                this._createServiceObject()
+                await this._createServiceObject()
                 return
             }
         }
-        if (mapping.name === updatedObj.name) {
-            //something else then name changed, I don't care about id
-            console.log('names are the same, so no update')
+        if (mapping.name === updatedObj.name || isTicket2TicketConnection(this.connection)) {
+            console.log('nothing to be updated on this issue')
             return
         }
         const primaryServiceMappingObject = mapping.mappingsObjects[0].id == this.data.id ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
@@ -150,6 +146,7 @@ export class WebhookHandler {
         const serviceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
         const secondServiceObject = await this._createTEInSecondService(this.connection, newTE, notCallingService, serviceObject)
+        console.log(secondServiceObject)
         if (!secondServiceObject) {
             return
         }
@@ -318,40 +315,40 @@ export class WebhookHandler {
 
     private async _createTEInSecondService(connection: Connection, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
         console.log('abaut to crate TE in second service')
-        if (!this._isTicket2Ticket(connection)) {
-            const syncedService = SyncedServiceCreator.create(notCallingService)
-            const start = new Date(newTE.start)
-            const end = new Date(newTE.end)
-            const additionalData: ServiceObject[] = []
-            connection.mappings.forEach((mapping: Mapping) => {
-                let secondaryMappingObject = null
-                if (mapping.primaryObjectId === serviceObject.id) { //issues
-                    secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.id
-                        ? mapping.mappingsObjects[1]
-                        : mapping.mappingsObjects[0]
-                } else if (mapping.primaryObjectId === serviceObject.projectId) { //projects
-                    secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.projectId
-                        ? mapping.mappingsObjects[1]
-                        : mapping.mappingsObjects[0]
-                }
-                if (secondaryMappingObject) {
-                    additionalData.push(
-                        new ServiceObject(secondaryMappingObject.id,
-                            secondaryMappingObject.name,
-                            secondaryMappingObject.type)
-                    )
-                }
-            })
-            if (!start || !end)
-                return null
-            try {
-                return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, additionalData)
-            } catch (err) {
-                return null
+        //if (!this._isTicket2Ticket(connection)) {
+        const syncedService = SyncedServiceCreator.create(notCallingService)
+        const start = new Date(newTE.start)
+        const end = new Date(newTE.end)
+        const additionalData: ServiceObject[] = []
+        connection.mappings.forEach((mapping: Mapping) => {
+            let secondaryMappingObject
+            if (mapping.primaryObjectId === serviceObject.id) { //issues
+                secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.id
+                    ? mapping.mappingsObjects[1]
+                    : mapping.mappingsObjects[0]
+            } else if (mapping.primaryObjectId === serviceObject.projectId) { //projects
+                secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.projectId
+                    ? mapping.mappingsObjects[1]
+                    : mapping.mappingsObjects[0]
             }
-        } else {
+            if (secondaryMappingObject) {
+                additionalData.push(
+                    new ServiceObject(secondaryMappingObject.id,
+                        secondaryMappingObject.name,
+                        secondaryMappingObject.type)
+                )
+            }
+        })
+        if (!start || !end)
+            return null
+        try {
+            return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, additionalData)
+        } catch (err) {
             return null
         }
+        // } else {
+        //     return null
+        // }
     }
 
     private async _deleteTEInSecondService(TEid: number | string, secondService: SyncedServiceDefinition): Promise<boolean> {

@@ -504,10 +504,11 @@ export class jiraSyncedService implements SyncedService {
                 return null
             const start = new Date(worklog.started)
             const durationInMiliseconds = worklog.timeSpentSeconds * 1000
+            const text = this._getcommentOfWorklog(worklog)
             timeEntry = new JiraTimeEntry(
                 this._createTimeEntryId(response.body.id, worklog.id),
                 response.body.fields.project.id,
-                this._getcommentOfWorklog(worklog),
+                text,
                 start,
                 this._calculateEndfromStartAndDuration(start, durationInMiliseconds),
                 durationInMiliseconds,
