@@ -17,7 +17,12 @@ export async function getIdOfAnotherServiceIdFromLink(service: SyncedServiceDefi
         const splitedValue = customFieldValue.toString().split('/')
         const issueKey = splitedValue[splitedValue.length - 1]
         const syncedService = new jiraSyncedService(service)
-        const issueId = await syncedService.getIssueIdFromIssueKey(issueKey)
+        let issueId
+        try {
+            issueId = await syncedService.getIssueIdFromIssueKey(issueKey)
+        } catch (ex) {
+            return null
+        }
         if (issueId)
             return issueId
         else

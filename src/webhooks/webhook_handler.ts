@@ -236,7 +236,12 @@ export class WebhookHandler {
         if (service.name === 'Jira') {
             const jiraSyncedService = syncedService as jiraSyncedService
             const syncCustomField = service.config.customField?.id
-            const serviceObjectTupple = await jiraSyncedService.getObjectsFromWebhook(this.data, syncCustomField)
+            let serviceObjectTupple
+            try {
+                serviceObjectTupple = await jiraSyncedService.getObjectsFromWebhook(this.data, syncCustomField)
+            } catch (ex) {
+                return false
+            }
             if (!serviceObjectTupple)
                 return false
             this.serviceObject = serviceObjectTupple[0]
@@ -315,7 +320,6 @@ export class WebhookHandler {
 
     private async _createTEInSecondService(connection: Connection, newTE: TimeEntry, notCallingService: SyncedServiceDefinition, serviceObject: ServiceObject): Promise<TimeEntry | null> {
         console.log('abaut to crate TE in second service')
-        //if (!this._isTicket2Ticket(connection)) {
         const syncedService = SyncedServiceCreator.create(notCallingService)
         const start = new Date(newTE.start)
         const end = new Date(newTE.end)
@@ -346,15 +350,18 @@ export class WebhookHandler {
         } catch (err) {
             return null
         }
-        // } else {
-        //     return null
-        // }
+
     }
 
     private async _deleteTEInSecondService(TEid: number | string, secondService: SyncedServiceDefinition): Promise<boolean> {
         const syncedService = SyncedServiceCreator.create(secondService)
         console.log('about do delete TE in second sercice')
-        const deleted = await syncedService.deleteTimeEntry(TEid)
+        let deleted
+        try {
+            deleted = await syncedService.deleteTimeEntry(TEid)
+        } catch (ex) {
+            return false
+        }
         if (deleted)
             return true
         else
