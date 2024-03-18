@@ -118,12 +118,13 @@ export class jiraSyncedService implements SyncedService {
         let received = 0
         while (total > received) {
             const query = this._generateQueryForGettingAllIssues(projectIdOrKey, selectByState, start, end)
+            const fieldsToGet = this._selectFieldsForSearch(syncCustomField)
             let response
             try {
                 response = await superagent
                     .get(`${this._searchUri}?${query}`)
                     .set('Authorization', `Basic ${this._secret}`)
-                    .query({ jql: query, startAt: received })
+                    .query({ jql: query, fields: fieldsToGet, startAt: received })
                     .accept('application/json')
             } catch (ex: any) {
                 this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, `${this._searchUri}?${query}`)
@@ -145,14 +146,21 @@ export class jiraSyncedService implements SyncedService {
         if (start) {
             query += ` AND worklogDate>="${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()}"`
             if (end) {
-                query += `AND worklogDate<="${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}"`
+                query += ` AND worklogDate<="${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}"`
             }
         }
-        if (selectByState) {
+        if (selectByState && this._ignoreIssueStates) {
             for (const ignoredState of this._ignoreIssueStates) {
                 query += ` AND statusCategory != ${ignoredState.id}`
             }
         }
+
+        return query
+    }
+    private _selectFieldsForSearch(syncCustomField: string | number | null) {
+        let query = `summary,project,worklog`
+        if (syncCustomField)
+            query += `,${syncCustomField}`
         return query
     }
 
