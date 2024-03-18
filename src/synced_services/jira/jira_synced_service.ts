@@ -157,11 +157,78 @@ export class jiraSyncedService implements SyncedService {
 
         return query
     }
-    private _selectFieldsForSearch(syncCustomField: string | number | null) {
-        let query = `summary,project,worklog`
+    private _selectFieldsForSearch(syncCustomField: string | number | null, worklog: boolean = false) {
+        let query = `summary,project`
+        if (worklog)
+            query += `,worklog`
         if (syncCustomField)
             query += `,${syncCustomField}`
         return query
+    }
+
+    private async _getWorklogsOfProject(projectIdOrKey: string | number, selectByState: boolean, syncCustomField: string | number | null, start?: Date, end?: Date): Promise<TimeEntry[]> {
+        const worklogs: JiraTimeEntry[] = []
+        let total = 1
+        let received = 0
+        while (total > received) {
+            console.log(received)
+            const query = this._generateQueryForGettingAllIssues(projectIdOrKey, selectByState, start, end)
+            const fieldsToGet = this._selectFieldsForSearch(syncCustomField, true)
+            let response
+            try {
+                response = await superagent
+                    .get(`${this._searchUri}?${query}`)
+                    .set('Authorization', `Basic ${this._secret}`)
+                    .query({ jql: query, fields: fieldsToGet, startAt: received })
+                    .accept('application/json')
+            } catch (ex: any) {
+                this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, `${this._searchUri}?${query}`)
+                return []
+            }
+            total = response.body.total
+            const responseIssues = response.body.issues
+            responseIssues.forEach(async (issue: any) => {
+                received++
+                if (issue.fields.worklog.total > issue.fields.worklog.maxResults) {
+                    const TEs = await this._getAllIssueWorklogs(issue.id, issue.fields.project.id)
+                    worklogs.push(...TEs)
+                } else {
+                    for (const worklog of issue.fields.worklog.worklogs) {
+                        const newWorklog = this._createJiraTimeEntryFromWorklog(worklog, issue.fields.project.id)
+                        worklogs.push(newWorklog)
+                    }
+                }
+
+            })
+        }
+        return worklogs
+    }
+
+    private async _getAllIssueWorklogs(issueId: number | string, projectId: string | number): Promise<JiraTimeEntry[]> {
+        const worklogs: JiraTimeEntry[] = []
+        let received = 0
+        let total = 1
+        while (total > received) {
+            let response
+            try {
+                response = await superagent
+                    .get(`${this._issueUri}/${issueId}/worklog`)
+                    .set('Authorization', `Basic ${this._secret}`)
+                    .accept('application/json')
+                    .query({ startAt: received })
+            } catch (ex: any) {
+                this.handleResponseException(ex, `Gettin worklog ${issueId}`, `${this._searchUri}/${issueId}/worklog`)
+                return []
+            }
+            total = response.body.total
+            const worklogs = response.body.worklogs
+            worklogs.forEach((worklog: any) => {
+                received++
+                const TE = this._createJiraTimeEntryFromWorklog(worklog, projectId)
+                worklogs.push(TE)
+            })
+        }
+        return worklogs
     }
 
     /**
@@ -213,36 +280,8 @@ export class jiraSyncedService implements SyncedService {
 
         const projects = await this._getAllProjects()
         for (const project of projects) {
-            const issues = await this._getIssuesOfProject(project.id, false, null, start, end)
-            for (const issue of issues) {
-                let response
-                try {
-                    response = await superagent
-                        .get(`${this._issueUri}/${issue.id}/worklog`)
-                        .set('Authorization', `Basic ${this._secret}`)
-                        .accept('application/json')
-                } catch (ex: any) {
-                    this.handleResponseException(ex, `getting all TEs`, `${this._issueUri}/${issue.id}/worklog`)
-                    continue
-                }
-                if (response.body.total > 0 && response.body.worklogs) {
-                    const worklogs = response.body.worklogs
-                    worklogs.forEach((worklog: any) => {
-                        const durationInMilliseconds = worklog.timeSpentSeconds * 1000
-                        const teStart = new Date(worklog.started)
-
-                        timeEntries.push(new JiraTimeEntry(
-                            this._createTimeEntryId(issue.id, worklog.id),
-                            project.id,
-                            this._getcommentOfWorklog(worklog),
-                            teStart,
-                            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
-                            durationInMilliseconds,
-                            new Date(worklog.updated),
-                        ))
-                    })
-                }
-            }
+            const projectTimeEntries = await this._getWorklogsOfProject(project.id, false, null, start, end)
+            timeEntries.push(...projectTimeEntries)
         }
         return timeEntries
     }
@@ -273,18 +312,7 @@ export class jiraSyncedService implements SyncedService {
 
         }
 
-        const durationInMilliseconds = myWorklog.timeSpentSeconds * 1000
-        const teStart = new Date(myWorklog.started)
-
-        return new JiraTimeEntry(
-            id,
-            response.body.fields.project.id,
-            this._getcommentOfWorklog(myWorklog),
-            teStart,
-            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
-            durationInMilliseconds,
-            new Date(myWorklog.updated)
-        )
+        return this._createJiraTimeEntryFromWorklog(myWorklog, response.body.fields.project.id)
     }
 
     /**
@@ -643,5 +671,19 @@ export class jiraSyncedService implements SyncedService {
         }
     }
 
+    private _createJiraTimeEntryFromWorklog(worklog: any, projectId: number | string): JiraTimeEntry {
+        const durationInMilliseconds = worklog.timeSpentSeconds * 1000
+        const teStart = new Date(worklog.started)
+
+        return new JiraTimeEntry(
+            this._createTimeEntryId(worklog.issueId, worklog.id),
+            projectId,
+            this._getcommentOfWorklog(worklog),
+            teStart,
+            this._calculateEndfromStartAndDuration(teStart, durationInMilliseconds),
+            durationInMilliseconds,
+            new Date(worklog.updated),
+        )
+    }
 
 }
