@@ -84,15 +84,15 @@ export class jiraSyncedService implements SyncedService {
     private async _getAllProjects(): Promise<ServiceObject[]> {
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .get(this._projectUri)
-                .set('Authorization', `Basic ${this._secret}`)
-            //.accept('application/json')
-            //.type('application/json')
+                .set('Authorization', `Basic ${this._secret}`))
         } catch (ex: any) {
             this.handleResponseException(ex, 'Get jira projects', this._projectUri)
             return []
         }
+        if (!response)
+            return []
         const projects: ServiceObject[] = []
         response.body?.forEach((project: any) => {
             projects.push(
