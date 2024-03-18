@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/node";
 import { IssueState } from "../../models/connection/config/issue_state";
 import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
 import { WebhookEventData } from "../../models/connection/config/webhook_event_data";
@@ -121,15 +122,17 @@ export class jiraSyncedService implements SyncedService {
             const fieldsToGet = this._selectFieldsForSearch(syncCustomField)
             let response
             try {
-                response = await superagent
+                response = await this._retryAndWait(superagent
                     .get(`${this._searchUri}?${query}`)
                     .set('Authorization', `Basic ${this._secret}`)
                     .query({ jql: query, fields: fieldsToGet, startAt: received })
-                    .accept('application/json')
+                    .accept('application/json'))
             } catch (ex: any) {
                 this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, `${this._searchUri}?${query}`)
                 return []
             }
+            if (!response)
+                continue
             total = response.body.total
             const responseIssues = response.body.issues
             responseIssues.forEach((issue: any) => {
@@ -171,20 +174,21 @@ export class jiraSyncedService implements SyncedService {
         let total = 1
         let received = 0
         while (total > received) {
-            console.log(received)
             const query = this._generateQueryForGettingAllIssues(projectIdOrKey, selectByState, start, end)
             const fieldsToGet = this._selectFieldsForSearch(syncCustomField, true)
             let response
             try {
-                response = await superagent
+                response = await this._retryAndWait(superagent
                     .get(`${this._searchUri}?${query}`)
                     .set('Authorization', `Basic ${this._secret}`)
                     .query({ jql: query, fields: fieldsToGet, startAt: received })
-                    .accept('application/json')
+                    .accept('application/json'))
             } catch (ex: any) {
                 this.handleResponseException(ex, `Get all issues of project ${projectIdOrKey}`, `${this._searchUri}?${query}`)
                 return []
             }
+            if (!response)
+                continue
             total = response.body.total
             const responseIssues = response.body.issues
             responseIssues.forEach(async (issue: any) => {
@@ -211,15 +215,17 @@ export class jiraSyncedService implements SyncedService {
         while (total > received) {
             let response
             try {
-                response = await superagent
+                response = await this._retryAndWait(superagent
                     .get(`${this._issueUri}/${issueId}/worklog`)
                     .set('Authorization', `Basic ${this._secret}`)
                     .accept('application/json')
-                    .query({ startAt: received })
+                    .query({ startAt: received }))
             } catch (ex: any) {
                 this.handleResponseException(ex, `Gettin worklog ${issueId}`, `${this._searchUri}/${issueId}/worklog`)
                 return []
             }
+            if (!response)
+                continue
             total = response.body.total
             const worklogs = response.body.worklogs
             worklogs.forEach((worklog: any) => {
@@ -294,10 +300,10 @@ export class jiraSyncedService implements SyncedService {
         const worklogId = this._worklogIdFromTimeEntryId(id)
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .get(`${this._issueUri}/${issueId}`)
                 .set('Authorization', `Basic ${this._secret}`)
-                .accept('application/json')
+                .accept('application/json'))
         } catch (ex: any) {
             this.handleResponseException(ex, `gettnig TE with id ${id}`, `${this._issueUri}/${issueId}`)
             return null
@@ -373,15 +379,17 @@ export class jiraSyncedService implements SyncedService {
             issueId = await this._getIdOfFallbackIssue(projectId)
         }
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .post(`${this._issueUri}/${issueId}/worklog`)
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
-                .send(data)
+                .send(data))
         } catch (ex: any) {
             this.handleResponseException(ex, `create new TE in Jira`, `${this._issueUri}/${issueId}/worklog`)
             return null
         }
+        if (!response)
+            return null
         const teStart = new Date(response.body.started)
 
         const newTimeEntry = new JiraTimeEntry(
@@ -407,14 +415,14 @@ export class jiraSyncedService implements SyncedService {
             return false
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .delete(`${this._issueUri}/${issueId}/worklog/${worklogId}`)
-                .set('Authorization', `Basic ${this._secret}`)
+                .set('Authorization', `Basic ${this._secret}`))
         } catch (ex: any) {
             this.handleResponseException(ex, `deleting TE with id ${id}`, `${this._issueUri}/${issueId}/worklog/${worklogId}`)
             return false
         }
-        if (response.status !== 204)
+        if (!response || response.status !== 204)
             return false
         return true
     }
@@ -462,10 +470,10 @@ export class jiraSyncedService implements SyncedService {
         const timeEntries: TimeEntry[] = []
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .get(`${this._issueUri}/${issueId}`)
                 .set('Authorization', `Basic ${this._secret}`)
-                .accept('application/json')
+                .accept('application/json'))
         } catch (ex: any) {
             this.handleResponseException(ex, `getting TE related to mapping obj for connection`, `${this._issueUri}/${issueId}`)
             return null
@@ -491,17 +499,19 @@ export class jiraSyncedService implements SyncedService {
         return timeEntries
     }
 
-    async getIssueIdFromIssueKey(issueKey: string): Promise<number> {
+    async getIssueIdFromIssueKey(issueKey: string): Promise<number | null> {
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .get(`${this._issueUri}/${issueKey}`)
                 .set('Authorization', `Basic ${this._secret}`)
-                .accept('application/json')
+                .accept('application/json'))
         } catch (ex: any) {
             this.handleResponseException(ex, `getting id of Issue with key ${issueKey} failed`, `${this._issueUri}/`)
             return 0
         }
+        if (!response)
+            return null
         return response.body.id
     }
 
@@ -511,14 +521,16 @@ export class jiraSyncedService implements SyncedService {
         const uri = type === this._projectsType ? this._projectUri : this._issueUri
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .get(`${uri}/${requestId}`)
                 .set('Authorization', `Basic ${this._secret}`)
-                .accept('application/json')
+                .accept('application/json'))
         } catch (ex: any) {
-            //this.handleResponseException(ex, `getting issueOr Project with id ${requestId} failed`, `${uri}/`)
+            this.handleResponseException(ex, `getting issueOr Project with id ${requestId} failed`, `${uri}/`)
             return null
         }
+        if (!response)
+            return null
         let serviceObject
         // console.log(response.body)
         try {
@@ -593,15 +605,17 @@ export class jiraSyncedService implements SyncedService {
             const query = this._generateSummarySearchQuery(projectId, this._fallbackIssueName)
             let response
             try {
-                response = await superagent
+                response = await this._retryAndWait(superagent
                     .get(`${this._searchUri}`)
                     .set('Authorization', `Basic ${this._secret}`)
                     .query({ 'jql': query, startAt: received })
-                    .accept('application/json')
+                    .accept('application/json'))
             } catch (ex: any) {
                 this.handleResponseException(ex, `Error finding fallback task of project id: ${projectId}`, `${this._searchUri}?${query}`)
                 return null
             }
+            if (!response)
+                return null
             total = response.body.total
             response.body.issues.forEach((i: any) => {
                 received++
@@ -639,13 +653,16 @@ export class jiraSyncedService implements SyncedService {
         }
         let response
         try {
-            response = await superagent
+            response = await this._retryAndWait(superagent
                 .post(`${this._issueUri}`)
                 .set('Authorization', `Basic ${this._secret}`)
                 .accept('application/json')
-                .send(data)
+                .send(data))
         } catch (ex: any) {
             this.handleResponseException(ex, `creating new Issue in Jira`, `${this._projectUri} `)
+            return null
+        }
+        if (!response) {
             return null
         }
         return response.body.id
@@ -684,6 +701,32 @@ export class jiraSyncedService implements SyncedService {
             durationInMilliseconds,
             new Date(worklog.updated),
         )
+    }
+
+    private async _retryAndWait(request: SuperAgentRequest, retryCount = 0): Promise<superagent.Response | null> {
+        let maxRetries = 4; // Should be 0 to disable (e.g. API is not idempotent)
+        let lastRetryDelayMillis = 5000;
+        let maxRetryDelayMillis = 30000;
+        const response = await request
+        if (response.ok) {
+            return response
+        } else {
+            let retryDelayMillis = -1;
+            if (response.headers['Retry-After']) {
+                retryDelayMillis = 1000 * response.headers['Retry-After'];
+            } else if (response.status == 429) {
+                retryDelayMillis = Math.min(2 * lastRetryDelayMillis, maxRetryDelayMillis)
+            }
+            if (retryDelayMillis > 0 && retryCount < maxRetries) {
+                retryDelayMillis += retryDelayMillis;
+                setTimeout(() => { }, retryDelayMillis);
+                retryCount++;
+                return await this._retryAndWait(request, retryCount)
+            } else {
+                this.handleResponseException(response.error, 'Jira retry and wait failed with too many atempts or different result then 429', request.url)
+                return null
+            }
+        }
     }
 
 }
