@@ -45,6 +45,7 @@ export class WebhookHandler {
         }
         console.log(this.serviceObject)
         console.log(this.timeEntry)
+        return false
 
         if (!this.serviceObject || (this.data.type === 'worklog' && !this.timeEntry))
             return false
@@ -238,32 +239,22 @@ export class WebhookHandler {
 
     private async _getDataFromRemote(syncedService: SyncedService): Promise<boolean> {
         const service = this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService
-        if (service.name === 'Jira') {
-            const jiraSyncedService = syncedService
-            const syncCustomField = service.config.customField?.id
-            let serviceObjectTupple
-            try {
-                serviceObjectTupple = await jiraSyncedService.getObjectsFromWebhook(this.data, syncCustomField)
-            } catch (ex) {
-                return false
-            }
-            if (!serviceObjectTupple)
-                return false
-            this.serviceObject = serviceObjectTupple[0]
-            if (this.data.type === "worklog" && serviceObjectTupple[1])
-                this.timeEntry = serviceObjectTupple[1]!
-            else if (this.data.type === "worklog" && !serviceObjectTupple[1]) {
-                return false
-            }
-            return true
-        } else if (service.name === 'Toggl Track') {
-            const togglSyncedService = syncedService
-            //TODO
-            return false
-            return true
-        } else {
+        const syncCustomField = service.config.customField?.id
+        let serviceObjectTupple
+        try {
+            serviceObjectTupple = await syncedService.getObjectsFromWebhook(this.data, syncCustomField)
+        } catch (ex) {
             return false
         }
+        if (!serviceObjectTupple)
+            return false
+        this.serviceObject = serviceObjectTupple[0]
+        if (this.data.type === "worklog" && serviceObjectTupple[1])
+            this.timeEntry = serviceObjectTupple[1]!
+        else if (this.data.type === "worklog" && !serviceObjectTupple[1]) {
+            return false
+        }
+        return true
     }
 
     private _isTicket2Ticket(connection: Connection): boolean { //TODO remove

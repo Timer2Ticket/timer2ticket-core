@@ -563,7 +563,7 @@ export class TogglTrackSyncedService implements SyncedService {
           new Date(timeEntry['updated']),
         ),
       );
-      const tagsFromResponse: String[] = timeEntry['tags']
+      const tagsFromResponse: string[] = timeEntry['tags']
       for (const tag of tags) {
         const found = tagsFromResponse.find(tagFromResponse => {
           return tag.name === tagFromResponse
