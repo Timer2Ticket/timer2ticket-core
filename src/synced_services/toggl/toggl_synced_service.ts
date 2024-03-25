@@ -11,6 +11,7 @@ import { SentryService } from "../../shared/sentry_service";
 import { ErrorService } from "../../shared/error_service";
 import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
 import { Connection } from "../../models/connection/connection";
+import { WebhookEventData } from "../../models/connection/config/webhook_event_data";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _syncedServiceDefinition: SyncedServiceDefinition;
@@ -517,5 +518,66 @@ export class TogglTrackSyncedService implements SyncedService {
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
 
+  }
+
+
+  async getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null> {
+
+    const queryParams = {
+      time_entry_ids: Number(webhookObject.id),
+      workspace_id: this._syncedServiceDefinition.config.workspace?.id,
+      user_ids: this._syncedServiceDefinition.config.userId,
+      user_agent: 'Timer2Ticket',
+      page: 0,
+    };
+
+    const entries: TogglTimeEntry[] = [];
+    let response;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .get(this._reportsUri)
+          .query(queryParams)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+      );
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getObjectFromWebhook');
+      return null;
+    }
+    const tags = await this._getAllTags()
+    if (!tags || tags === true)
+      return null
+
+    let myTag
+    response.body?.data.forEach((timeEntry: never) => {
+      entries.push(
+        new TogglTimeEntry(
+          timeEntry['id'],
+          timeEntry['pid'],
+          timeEntry['description'],
+          new Date(timeEntry['start']),
+          new Date(timeEntry['end']),
+          timeEntry['dur'],
+          timeEntry['tags'],
+          new Date(timeEntry['updated']),
+        ),
+      );
+      const tagsFromResponse: String[] = timeEntry['tags']
+      for (const tag of tags) {
+        const found = tagsFromResponse.find(tagFromResponse => {
+          return tag.name === tagFromResponse
+        })
+        if (found) {
+          myTag = tag
+          break
+        }
+      }
+    });
+    if (!myTag || entries.length !== 1) {
+      return null
+    }
+
+    return [myTag, entries[0]]
   }
 }

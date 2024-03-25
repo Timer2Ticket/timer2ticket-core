@@ -36,14 +36,19 @@ export class WebhookHandler {
             await this._deleteTimeEntry()
             return true
         }
+        console.log('neni to delte worklogu')
         const syncedService = SyncedServiceCreator.create(this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService)
         const dataFromService = await this._getDataFromRemote(syncedService)
         if (!dataFromService) {
+            console.log('data ze service chybi')
             return false
         }
+        console.log(this.serviceObject)
+        console.log(this.timeEntry)
 
         if (!this.serviceObject || (this.data.type === 'worklog' && !this.timeEntry))
             return false
+        console.log('data ze service jsou spravna')
         switch (this.data.event) {
             case "CREATED":
                 switch (this.data.type) {
@@ -234,7 +239,7 @@ export class WebhookHandler {
     private async _getDataFromRemote(syncedService: SyncedService): Promise<boolean> {
         const service = this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService
         if (service.name === 'Jira') {
-            const jiraSyncedService = syncedService as jiraSyncedService
+            const jiraSyncedService = syncedService
             const syncCustomField = service.config.customField?.id
             let serviceObjectTupple
             try {
@@ -250,8 +255,15 @@ export class WebhookHandler {
             else if (this.data.type === "worklog" && !serviceObjectTupple[1]) {
                 return false
             }
+            return true
+        } else if (service.name === 'Toggl Track') {
+            const togglSyncedService = syncedService
+            //TODO
+            return false
+            return true
+        } else {
+            return false
         }
-        return true
     }
 
     private _isTicket2Ticket(connection: Connection): boolean { //TODO remove

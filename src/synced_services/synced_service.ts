@@ -6,6 +6,7 @@ import { Timer2TicketError } from "../models/timer2TicketError";
 import { SentryService } from "../shared/sentry_service";
 import { ErrorService } from "../shared/error_service";
 import { Connection } from "../models/connection/connection";
+import { WebhookEventData } from "../models/connection/config/webhook_event_data";
 
 export interface SyncedService {
 
@@ -82,4 +83,6 @@ export interface SyncedService {
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[];
 
   getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null>;
+
+  getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null>;
 }

@@ -13,6 +13,7 @@ import { SentryService } from "../../shared/sentry_service";
 import { ErrorService } from "../../shared/error_service";
 import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
 import { Connection } from "../../models/connection/connection";
+import { WebhookEventData } from "../../models/connection/config/webhook_event_data";
 
 export class RedmineSyncedService implements SyncedService {
   private _syncedServiceDefinition: SyncedServiceDefinition;
@@ -600,5 +601,9 @@ export class RedmineSyncedService implements SyncedService {
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
 
+  }
+
+  getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null> {
+    throw 'getObjectsFromWebhook is not supported on Redmine since Redmine webhooks are not supported!'
   }
 }
