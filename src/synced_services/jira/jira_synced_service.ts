@@ -532,13 +532,11 @@ export class jiraSyncedService implements SyncedService {
         if (!response)
             return null
         let serviceObject
-        // console.log(response.body)
         try {
             serviceObject = type === this._projectsType
                 ? new ServiceObject(response.body.id, response.body.name, type)
                 : new ServiceObject(response.body.id, response.body.fields.summary, type, response.body.fields.project.id, syncCustomField ? response.body.fields[syncCustomField] : null)
         } catch (ex: any) {
-            // console.log('failed to build ServiceObject', ex)
             return null
         }
         let timeEntry = null

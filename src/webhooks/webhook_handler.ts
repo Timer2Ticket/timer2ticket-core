@@ -36,20 +36,15 @@ export class WebhookHandler {
             await this._deleteTimeEntry()
             return true
         }
-        console.log('neni to delte worklogu')
         const syncedService = SyncedServiceCreator.create(this.data.serviceNumber === 1 ? this.connection.firstService : this.connection.secondService)
         const dataFromService = await this._getDataFromRemote(syncedService)
         if (!dataFromService) {
             console.log('data ze service chybi')
             return false
         }
-        console.log(this.serviceObject)
-        console.log(this.timeEntry)
-        return false
 
         if (!this.serviceObject || (this.data.type === 'worklog' && !this.timeEntry))
             return false
-        console.log('data ze service jsou spravna')
         switch (this.data.event) {
             case "CREATED":
                 switch (this.data.type) {
@@ -85,7 +80,6 @@ export class WebhookHandler {
     private async _createServiceObject() {
         const newObj = this.serviceObject!
         let secondServiceObject
-        console.log(newObj)
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
         if (this._isTicket2Ticket(this.connection) && newObj.syncCustomFieldValue) {
             secondServiceObject = await this._getIssueForTicket2TicketMapping(this.connection, notCallingService, newObj)
@@ -152,7 +146,6 @@ export class WebhookHandler {
         const serviceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
         const notCallingService = this.data.serviceNumber === 1 ? this.connection.secondService : this.connection.firstService
         const secondServiceObject = await this._createTEInSecondService(this.connection, newTE, notCallingService, serviceObject)
-        console.log(secondServiceObject)
         if (!secondServiceObject) {
             return
         }
@@ -164,7 +157,7 @@ export class WebhookHandler {
         TESO.serviceTimeEntryObjects.push(STEOsecond)
 
         await databaseService.createTimeEntrySyncedObject(TESO);
-        // console.log('TE Created')
+        console.log('TE Created')
     }
     private async _updateTimeEntry() {
         console.log('about to update TE')
@@ -176,7 +169,7 @@ export class WebhookHandler {
         })
         if (!TESO2Update) {
             console.log('time entry to update not found')
-            //this._createTimeEntry()
+            await this._createTimeEntry()
             return
         } else {
             const callingServiceName = this.data.serviceNumber === 1 ? this.connection.firstService.name : this.connection.secondService.name
@@ -195,7 +188,6 @@ export class WebhookHandler {
             const newSTEO = new ServiceTimeEntryObject(secondServiceObject.id, notCallingService.name, false)
             TESO2Update.serviceTimeEntryObjects[STEOIndex] = newSTEO
             TESO2Update.lastUpdated = Date.now()
-            console.log('teso 2 update: ', TESO2Update)
             await databaseService.updateTimeEntrySyncedObject(TESO2Update)
             console.log('updated')
         }
@@ -294,7 +286,6 @@ export class WebhookHandler {
             if (!serviceObjects || serviceObjects === true)
                 return null
             const idFromCustomFieldLink = await getIdOfAnotherServiceIdFromLink(notCallingService, serviceObject.syncCustomFieldValue)
-            console.log(idFromCustomFieldLink)
             const foundObject = serviceObjects.find((o: ServiceObject) => {
                 return idFromCustomFieldLink == o.id
             })
@@ -306,13 +297,11 @@ export class WebhookHandler {
     private async _updateServiceObjectInSeconadyService(connection: Connection, secondServiceObjectId: number | string, newObj: ServiceObject, notCallingService: SyncedServiceDefinition): Promise<ServiceObject | null> {
         if (!this._isTicket2Ticket(connection)) {
             //create tag in second service
-            console.log(notCallingService.name, secondServiceObjectId, newObj)
             const syncedService = SyncedServiceCreator.create(notCallingService)
             try {
                 return await syncedService.updateServiceObject(secondServiceObjectId, newObj)
             } catch (err) {
                 // console.log(err)
-                console.log('chyba')
                 return null
             }
         } else {
@@ -329,15 +318,22 @@ export class WebhookHandler {
         const additionalData: ServiceObject[] = []
         connection.mappings.forEach((mapping: Mapping) => {
             let secondaryMappingObject
-            if (mapping.primaryObjectId === serviceObject.id) { //issues
+            if (mapping.primaryObjectType === 'issue' && (
+                mapping.mappingsObjects[0].id === serviceObject.id ||
+                mapping.mappingsObjects[1].id === serviceObject.id)) { //issues and tags
                 secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.id
                     ? mapping.mappingsObjects[1]
                     : mapping.mappingsObjects[0]
-            } else if (mapping.primaryObjectId === serviceObject.projectId) { //projects
+
+            } else if (mapping.primaryObjectType === 'project' && (
+                mapping.mappingsObjects[0].id === serviceObject.projectId ||
+                mapping.mappingsObjects[1].id === serviceObject.projectId)
+            ) { //projects
                 secondaryMappingObject = mapping.mappingsObjects[0].id === serviceObject.projectId
                     ? mapping.mappingsObjects[1]
                     : mapping.mappingsObjects[0]
             }
+
             if (secondaryMappingObject) {
                 additionalData.push(
                     new ServiceObject(secondaryMappingObject.id,
@@ -346,11 +342,14 @@ export class WebhookHandler {
                 )
             }
         })
-        if (!start || !end)
+        if (!start || !end || additionalData.length < 1) {
             return null
+        }
         try {
-            return await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, additionalData)
+            const result = await syncedService.createTimeEntry(newTE.durationInMilliseconds, start, end, newTE.text, additionalData)
+            return result
         } catch (err) {
+            console.log(err)
             return null
         }
 
