@@ -66,7 +66,6 @@ export class ConfigSyncJob extends SyncJob {
     try {
       newMappings = await this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
     } catch (e: any) {
-      console.log('nepovedlo se vytvorit nove P2P mapovani')
       const message = `Problem occured while creating Mappings from remote services`
       this._jobLog.errors.push(this._errorService.createConfigJobError(message));
       await this.updateConnectionConfigSyncJobLastDone(false);
@@ -80,7 +79,14 @@ export class ConfigSyncJob extends SyncJob {
     const missingMappings: Mapping[] = new Array()
     for (let newMapping of newMappings) {
       const found = this._connection.mappings.find((m: Mapping) => {
-        return m.primaryObjectId === newMapping.primaryObjectId
+        //needs to be checked if both objects of mapping are same because of m:n mappping
+        //both parts of or ane needed because off possible cross link reference
+        return (
+          (m.mappingsObjects[0].id === newMapping.mappingsObjects[0].id &&
+            m.mappingsObjects[1].id === newMapping.mappingsObjects[1].id)
+          || (m.mappingsObjects[0].id === newMapping.mappingsObjects[1].id &&
+            m.mappingsObjects[1].id === newMapping.mappingsObjects[0].id)
+        )
       })
       if (!found) {
         missingMappings.push(newMapping)
