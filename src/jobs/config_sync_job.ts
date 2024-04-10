@@ -42,7 +42,6 @@ export class ConfigSyncJob extends SyncJob {
     creates new and deletes deleted mappings
   */
   private async _doTicket2TicketSync() {
-    console.log('config job for 2 project tools started')
     //get synced services
     const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
     const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)

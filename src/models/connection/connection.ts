@@ -40,7 +40,6 @@ export class Connection {
   }
 
   static getPrimaryServiceDefinition(connection: Connection): SyncedServiceDefinition | undefined {
-    //TODO dramatic changes whe implementing ticket-ticket will be needed
     if (connection.firstService.name === 'Redmine' || connection.firstService.name === 'Jira') {
       return connection.firstService;
     } else if (connection.secondService.name === 'Redmine' || connection.secondService.name === 'Jira') {
