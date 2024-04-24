@@ -13,6 +13,7 @@ import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
 import {Timer2TicketError} from "../models/timer2TicketError";
+import {RedmineTimeEntry} from "../models/synced_service/time_entry/redmine_time_entry";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -287,10 +288,27 @@ export class TimeEntriesSyncJob extends SyncJob {
         // loop through all STEOs (except that which TE is updated last)
         for (const serviceTimeEntryObjectWrapper of timeEntrySyncedObjectWrapper.serviceTimeEntryObjectWrappers) {
           if (serviceTimeEntryObjectWrapper !== lastUpdatedServiceTimeEntryObjectWrapper) {
-            // delete current TE from the service and continue to the scenario e)
-            await serviceTimeEntryObjectWrapper.syncedService.deleteTimeEntry(serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id);
-            // set as undefined => use scenario e)
-            serviceTimeEntryObjectWrapper.timeEntry = undefined;
+
+            if (serviceTimeEntryObjectWrapper.timeEntry) {
+              console.log("B1 - update")
+
+              const index = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.indexOf(serviceTimeEntryObjectWrapper.serviceTimeEntryObject);
+              timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.splice(index, 1);
+
+              serviceTimeEntryObjectWrapper.timeEntry = await this._updateTimeEntry(
+                  serviceTimeEntryObjectWrapper.serviceDefinition,
+                  lastUpdatedServiceTimeEntryObjectWrapper.timeEntry,
+                  serviceTimeEntryObjectWrapper.timeEntry,
+                  otherServicesMappingsObjects,
+                  timeEntrySyncedObjectWrapper.timeEntrySyncedObject,
+                  serviceTimeEntryObjectWrapper.serviceTimeEntryObject.isOrigin
+              );
+            } else {
+              // delete current TE from the service and continue to the scenario e)
+              await serviceTimeEntryObjectWrapper.syncedService.deleteTimeEntry(serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id);
+              // set as undefined => use scenario e)
+              serviceTimeEntryObjectWrapper.timeEntry = undefined;
+            }
           }
         }
       } else {
@@ -385,7 +403,7 @@ export class TimeEntriesSyncJob extends SyncJob {
   private async updateJobLog(errors: Timer2TicketError[])
   {
     this._jobLog.errors.concat(errors)
-    let updated = await databaseService.updateJobLog(this._jobLog);
+    const updated = await databaseService.updateJobLog(this._jobLog);
     if (updated instanceof JobLog) {
       this._jobLog = updated;
     }
@@ -434,6 +452,57 @@ export class TimeEntriesSyncJob extends SyncJob {
       // push newly created STEOs (with isOrigin: false)
       timeEntrySyncedObject.serviceTimeEntryObjects.push(
         new ServiceTimeEntryObject(createdTimeEntry.id, serviceDefinition.name, shouldBeOrigin)
+      );
+
+      // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
+      this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
+
+      await this.updateJobLog(service.errors)
+      return createdTimeEntry;
+    }
+    await this.updateJobLog(service.errors)
+    return undefined;
+  }
+
+  /**
+   * Updates a time entry for given service based on given TE model.
+   * Also creates new STEO and pushes it to the given TESO.
+   * Updates given TESO's lastUpdated property to updated TE's date.
+   * Returns updated TE
+   *
+   * @param serviceDefinition
+   * @param updatedTimeEntry
+   * @param originalTimeEntry
+   * @param otherServicesMappingsObjects
+   * @param timeEntrySyncedObject
+   * @param shouldBeOrigin
+   */
+  private async _updateTimeEntry(
+      serviceDefinition: ServiceDefinition,
+      updatedTimeEntry: TimeEntry,
+      originalTimeEntry: TimeEntry,
+      otherServicesMappingsObjects: MappingsObject[],
+      timeEntrySyncedObject: TimeEntrySyncedObject,
+      shouldBeOrigin: boolean)
+      : Promise<TimeEntry | undefined> {
+
+    const service = SyncedServiceCreator.create(serviceDefinition, this._user);
+    const serviceObjectsMappings = otherServicesMappingsObjects.
+    filter((mappingsObject: { service: string; }) => mappingsObject.service === serviceDefinition.name).
+    map(mappingsObject => new ServiceObject(mappingsObject.id, mappingsObject.name, mappingsObject.type));
+
+    const createdTimeEntry = await service.updateTimeEntry(
+        updatedTimeEntry.durationInMilliseconds,
+        new Date(updatedTimeEntry.start),
+        updatedTimeEntry.text,
+        serviceObjectsMappings,
+        originalTimeEntry
+    );
+
+    if (createdTimeEntry) {
+      // push newly created STEOs (with isOrigin: false)
+      timeEntrySyncedObject.serviceTimeEntryObjects.push(
+          new ServiceTimeEntryObject(createdTimeEntry.id, serviceDefinition.name, shouldBeOrigin)
       );
 
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
