@@ -392,13 +392,13 @@ export class RedmineSyncedService implements SyncedService {
       return null;
     }
 
-    let redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
+    const redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
     if (typeof redmineServiceDefinition === 'undefined') {
       //console.log('Redmine service definition not found for user '.concat(user.username));
       return null;
     }
 
-    let redmineUserId = redmineServiceDefinition.config.userId;
+    const redmineUserId = redmineServiceDefinition.config.userId;
     //console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
 
     const queryParams: Record<string, any> = {
@@ -566,7 +566,13 @@ export class RedmineSyncedService implements SyncedService {
     );
   }
 
-  async updateTimeEntry(durationInMilliseconds: number, start: Date, text: string, additionalData: ServiceObject[], originalTimeEntry: RedmineTimeEntry): Promise<TimeEntry> {
+  async updateTimeEntry(
+    durationInMilliseconds: number,
+    start: Date,
+    text: string,
+    additionalData: ServiceObject[],
+    originalTimeEntry: RedmineTimeEntry
+  ): Promise<TimeEntry> {
 
     type ProjectObject = {id: number| string, name: string};
     type ActivityObject = {id: number| string, name: string};

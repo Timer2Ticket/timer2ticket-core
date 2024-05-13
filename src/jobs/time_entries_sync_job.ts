@@ -13,7 +13,6 @@ import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
 import {Timer2TicketError} from "../models/timer2TicketError";
-import {RedmineTimeEntry} from "../models/synced_service/time_entry/redmine_time_entry";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -500,7 +499,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     const service = SyncedServiceCreator.create(serviceDefinition, this._user);
     const serviceObjectsMappings = otherServicesMappingsObjects
-      .filter((mappingsObject: { service: string; }) => mappingsObject.service === serviceDefinition.name)
+      .filter(mappingsObject => mappingsObject.service === serviceDefinition.name)
       .map(mappingsObject => new ServiceObject(mappingsObject.id, mappingsObject.name, mappingsObject.type));
 
     const createdTimeEntry = await service.updateTimeEntry(
