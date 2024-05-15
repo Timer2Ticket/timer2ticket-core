@@ -517,6 +517,18 @@ export class TogglTrackSyncedService implements SyncedService {
       }
     }
 
+    const originalEntry = new TogglTimeEntry(
+        originalTimeEntry.id,
+        originalTimeEntry.projectId,
+        originalTimeEntry.text,
+        originalTimeEntry.start,
+        originalTimeEntry.end,
+        originalTimeEntry.durationInMilliseconds,
+        originalTimeEntry.tags,
+        originalTimeEntry.lastUpdated,
+        null,
+    )
+
     delete originalTimeEntry.originalEntry['tag_ids'];
 
     //project id
@@ -549,15 +561,18 @@ export class TogglTrackSyncedService implements SyncedService {
    if (new Set(tags) !== new Set(originalTimeEntry.tags)) {
      originalTimeEntry.originalEntry['tags'] = tags;
    }
-
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-            .put(`${this._workspacesTimeEntriesUri}/${originalTimeEntry.id}`)
-            .auth(this._serviceDefinition.apiKey, 'api_token')
-            .send(originalTimeEntry.originalEntry)
-    );
-
-   //TODO if not reponse.ok, return original entry from wrapper originalTimeEntry, cloned before modification
+    let response = null;
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .put(`${this._workspacesTimeEntriesUri}/${originalTimeEntry.id}`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+              .send(originalTimeEntry.originalEntry)
+      );
+    } catch (error) {
+      //TODO handle error somehow :)
+      return originalEntry;
+    }
 
     return new TogglTimeEntry(
         response.body['id'],

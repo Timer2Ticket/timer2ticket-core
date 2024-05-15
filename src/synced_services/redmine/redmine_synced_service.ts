@@ -580,6 +580,19 @@ export class RedmineSyncedService implements SyncedService {
     let issueId;
     let activity: ActivityObject|null = null;
 
+    const timeEntry = new RedmineTimeEntry(
+        originalTimeEntry.id,
+        originalTimeEntry.projectId,
+        originalTimeEntry.text,
+        originalTimeEntry.start,
+        originalTimeEntry.end,
+        originalTimeEntry.durationInMilliseconds,
+        originalTimeEntry.issueId,
+        originalTimeEntry.activityId,
+        originalTimeEntry.lastUpdated,
+        null
+    );
+
     for (const data of additionalData) {
       if (data.type === this._projectsType) {
         project = {id: data.id, name: data.name};
@@ -615,8 +628,8 @@ export class RedmineSyncedService implements SyncedService {
     if (text != originalTimeEntry.text) {
       timeEntryBody.comments = text;
     }
-
-      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+    try {
+      await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
               .put(this._timeEntryUri.replace('[id]', originalTimeEntry.originalEntry.id.toString()))
               .accept('application/json')
@@ -624,14 +637,17 @@ export class RedmineSyncedService implements SyncedService {
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
               .send({ time_entry: timeEntryBody }),
       )
-      //TODO add error handling on !response.ok
+
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
       if (!updated) {
-        //should never happen
-        throw new Error("Time entry not found")
+        return timeEntry;
       }
 
-    return updated;
+      return updated;
+    } catch (error) {
+      //TODO handle somehow :)
+      return timeEntry;
+    }
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {
