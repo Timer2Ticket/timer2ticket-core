@@ -639,11 +639,8 @@ export class RedmineSyncedService implements SyncedService {
       )
 
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
-      if (!updated) {
-        return timeEntry;
-      }
+      return updated ?? timeEntry;
 
-      return updated;
     } catch (error) {
       //TODO handle somehow :)
       return timeEntry;
