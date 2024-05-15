@@ -624,6 +624,7 @@ export class RedmineSyncedService implements SyncedService {
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
               .send({ time_entry: timeEntryBody }),
       )
+      //TODO add error handling on !response.ok
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
       if (!updated) {
         //should never happen

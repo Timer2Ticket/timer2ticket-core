@@ -557,6 +557,8 @@ export class TogglTrackSyncedService implements SyncedService {
             .send(originalTimeEntry.originalEntry)
     );
 
+   //TODO if not reponse.ok, return original entry from wrapper originalTimeEntry, cloned before modification
+
     return new TogglTimeEntry(
         response.body['id'],
         response.body['pid'],
