@@ -13,7 +13,6 @@ import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
 import {Timer2TicketError} from "../models/timer2TicketError";
-import {RedmineTimeEntry} from "../models/synced_service/time_entry/redmine_time_entry";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -448,20 +447,33 @@ export class TimeEntriesSyncJob extends SyncJob {
       serviceObjectsMappings,
     );
 
+    return await this.handleCreatedTimeEntry(
+      createdTimeEntry,
+      timeEntrySyncedObject,
+      serviceDefinition.name,
+      shouldBeOrigin,
+      service.errors
+    )
+  }
+
+  private async handleCreatedTimeEntry(
+    createdTimeEntry: TimeEntry | null,
+    timeEntrySyncedObject: TimeEntrySyncedObject,
+    serviceDefinitionName: string,
+    shouldBeOrigin: boolean,
+    errors: Timer2TicketError[]
+  ) {
     if (createdTimeEntry) {
       // push newly created STEOs (with isOrigin: false)
       timeEntrySyncedObject.serviceTimeEntryObjects.push(
-        new ServiceTimeEntryObject(createdTimeEntry.id, serviceDefinition.name, shouldBeOrigin)
+        new ServiceTimeEntryObject(createdTimeEntry.id, serviceDefinitionName, shouldBeOrigin)
       );
 
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
-
-      await this.updateJobLog(service.errors)
-      return createdTimeEntry;
     }
-    await this.updateJobLog(service.errors)
-    return undefined;
+    await this.updateJobLog(errors)
+    return createdTimeEntry ?? undefined;
   }
 
   /**
@@ -483,13 +495,12 @@ export class TimeEntriesSyncJob extends SyncJob {
       originalTimeEntry: TimeEntry,
       otherServicesMappingsObjects: MappingsObject[],
       timeEntrySyncedObject: TimeEntrySyncedObject,
-      shouldBeOrigin: boolean)
-      : Promise<TimeEntry | undefined> {
+      shouldBeOrigin: boolean) {
 
     const service = SyncedServiceCreator.create(serviceDefinition, this._user);
-    const serviceObjectsMappings = otherServicesMappingsObjects.
-    filter((mappingsObject: { service: string; }) => mappingsObject.service === serviceDefinition.name).
-    map(mappingsObject => new ServiceObject(mappingsObject.id, mappingsObject.name, mappingsObject.type));
+    const serviceObjectsMappings = otherServicesMappingsObjects
+      .filter(mappingsObject => mappingsObject.service === serviceDefinition.name)
+      .map(mappingsObject => new ServiceObject(mappingsObject.id, mappingsObject.name, mappingsObject.type));
 
     const createdTimeEntry = await service.updateTimeEntry(
         updatedTimeEntry.durationInMilliseconds,
@@ -499,20 +510,13 @@ export class TimeEntriesSyncJob extends SyncJob {
         originalTimeEntry
     );
 
-    if (createdTimeEntry) {
-      // push newly created STEOs (with isOrigin: false)
-      timeEntrySyncedObject.serviceTimeEntryObjects.push(
-          new ServiceTimeEntryObject(createdTimeEntry.id, serviceDefinition.name, shouldBeOrigin)
-      );
-
-      // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
-      this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
-
-      await this.updateJobLog(service.errors)
-      return createdTimeEntry;
-    }
-    await this.updateJobLog(service.errors)
-    return undefined;
+    return await this.handleCreatedTimeEntry(
+      createdTimeEntry,
+      timeEntrySyncedObject,
+      serviceDefinition.name,
+      shouldBeOrigin,
+      service.errors
+    )
   }
 
   /**

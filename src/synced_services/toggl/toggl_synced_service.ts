@@ -356,15 +356,15 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
-    let start = new Date();
+    const start = new Date();
     start.setMonth(start.getMonth() - 6);
-    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
+    const timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
 
     if (timeEntryFromApi === null) {
        return;
     }
 
-    let body =
+    const body =
       [
         {'op': 'replace',
           'path': '/description',
@@ -373,7 +373,7 @@ export class TogglTrackSyncedService implements SyncedService {
       ]
     ;
 
-    let response = await this._retryAndWaitInCaseOfTooManyRequests(
+    const response = await this._retryAndWaitInCaseOfTooManyRequests(
         superagent
             .patch(`${this._workspacesTimeEntriesUri}/${timeEntry?.id}`)
             .auth(this._serviceDefinition.apiKey, 'api_token')
@@ -499,7 +499,13 @@ export class TogglTrackSyncedService implements SyncedService {
     );
   }
 
-  async updateTimeEntry(durationInMilliseconds: number, start: Date, text: string, additionalData: ServiceObject[], originalTimeEntry: TogglTimeEntry): Promise<TimeEntry> {
+  async updateTimeEntry(
+    durationInMilliseconds: number,
+    start: Date,
+    text: string,
+    additionalData: ServiceObject[],
+    originalTimeEntry: TogglTimeEntry
+  ): Promise<TimeEntry> {
     let projectId;
     const tags: string[] = [];
 
@@ -528,7 +534,7 @@ export class TogglTrackSyncedService implements SyncedService {
     const originalDate = new Date(originalTimeEntry.start);
     const startDate = new Date(start);
     originalDate.setHours(0, 0, 0);
-    startDate.setHours(0, 0,0 );
+    startDate.setHours(0, 0, 0);
     if (Utilities.compare(startDate, originalDate)) {
       originalTimeEntry.originalEntry['start_date'] = Utilities.getOnlyDateString(start);
     }
@@ -550,6 +556,8 @@ export class TogglTrackSyncedService implements SyncedService {
             .auth(this._serviceDefinition.apiKey, 'api_token')
             .send(originalTimeEntry.originalEntry)
     );
+
+   //TODO if not reponse.ok, return original entry from wrapper originalTimeEntry, cloned before modification
 
     return new TogglTimeEntry(
         response.body['id'],
