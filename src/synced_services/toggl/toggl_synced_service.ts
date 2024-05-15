@@ -545,8 +545,8 @@ export class TogglTrackSyncedService implements SyncedService {
     //spent on
     const originalDate = new Date(originalTimeEntry.start);
     const startDate = new Date(start);
-    originalDate.setHours(0, 0, 0);
-    startDate.setHours(0, 0, 0);
+    originalDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
     if (Utilities.compare(startDate, originalDate)) {
       originalTimeEntry.originalEntry['start_date'] = Utilities.getOnlyDateString(start);
     }
