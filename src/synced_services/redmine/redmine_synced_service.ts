@@ -621,7 +621,11 @@ export class RedmineSyncedService implements SyncedService {
       timeEntryBody.hours = (hours === 0.0 || hours > 0.01) ? hours : 0.01;
     }
 
-    if (Utilities.compare(start, originalTimeEntry.start)) {
+    const originalDate = new Date(originalTimeEntry.start);
+    const startDate = new Date(start);
+    originalDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
+    if (Utilities.compare(startDate, originalDate)) {
       timeEntryBody.spent_on = Utilities.getOnlyDateString(start);
     }
 
@@ -642,7 +646,7 @@ export class RedmineSyncedService implements SyncedService {
       return updated ?? timeEntry;
 
     } catch (error) {
-      //TODO handle somehow :)
+      //TODO handle and report that update somehow failed - but not critical - will be retried :)
       return timeEntry;
     }
   }

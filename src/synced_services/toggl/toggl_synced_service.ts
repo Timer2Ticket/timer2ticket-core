@@ -561,30 +561,30 @@ export class TogglTrackSyncedService implements SyncedService {
    if (new Set(tags) !== new Set(originalTimeEntry.tags)) {
      originalTimeEntry.originalEntry['tags'] = tags;
    }
-    let response = null;
+
     try {
-      response = await this._retryAndWaitInCaseOfTooManyRequests(
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
               .put(`${this._workspacesTimeEntriesUri}/${originalTimeEntry.id}`)
               .auth(this._serviceDefinition.apiKey, 'api_token')
               .send(originalTimeEntry.originalEntry)
       );
+
+      return new TogglTimeEntry(
+          response.body['id'],
+          response.body['pid'],
+          response.body['description'],
+          new Date(response.body['start']),
+          new Date(response.body['stop']),
+          response.body['duration'] * 1000,
+          response.body['tags'],
+          new Date(response.body['at']),
+          response.body
+      );
     } catch (error) {
       //TODO handle error somehow :)
       return originalEntry;
     }
-
-    return new TogglTimeEntry(
-        response.body['id'],
-        response.body['pid'],
-        response.body['description'],
-        new Date(response.body['start']),
-        new Date(response.body['stop']),
-        response.body['duration'] * 1000,
-        response.body['tags'],
-        new Date(response.body['at']),
-        response.body
-    );
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {

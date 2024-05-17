@@ -292,6 +292,10 @@ export class TimeEntriesSyncJob extends SyncJob {
               console.log("B1 - update")
 
               const index = timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.indexOf(serviceTimeEntryObjectWrapper.serviceTimeEntryObject);
+              if (index == -1) {
+                // shouldn't happen but better safe
+                Sentry.captureMessage(`Object not found ${serviceTimeEntryObjectWrapper.serviceTimeEntryObject}`);
+              }
               timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.splice(index, 1);
 
               serviceTimeEntryObjectWrapper.timeEntry = await this._updateTimeEntry(
