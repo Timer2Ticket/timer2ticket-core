@@ -330,6 +330,7 @@ export class RedmineSyncedService implements SyncedService {
             timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
             timeEntry['activity']['id'],
             new Date(timeEntry['updated_on']),
+            timeEntry
           ),
         );
       });
@@ -377,6 +378,7 @@ export class RedmineSyncedService implements SyncedService {
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
       new Date(response.body.time_entry['updated_on']),
+      response.body
     );
   }
 
@@ -390,13 +392,13 @@ export class RedmineSyncedService implements SyncedService {
       return null;
     }
 
-    let redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
+    const redmineServiceDefinition = user.serviceDefinitions.find(element => element.name === "Redmine");
     if (typeof redmineServiceDefinition === 'undefined') {
       //console.log('Redmine service definition not found for user '.concat(user.username));
       return null;
     }
 
-    let redmineUserId = redmineServiceDefinition.config.userId;
+    const redmineUserId = redmineServiceDefinition.config.userId;
     //console.log('Nasiel som redmine user id='.concat(redmineUserId.toString()));
 
     const queryParams: Record<string, any> = {
@@ -448,6 +450,7 @@ export class RedmineSyncedService implements SyncedService {
                 timeEntry['issue'] ? timeEntry['issue']['id'] : undefined,
                 timeEntry['activity']['id'],
                 new Date(timeEntry['updated_on']),
+                timeEntry
             ),
         );
       });
@@ -559,7 +562,93 @@ export class RedmineSyncedService implements SyncedService {
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
       lastUpdated,
+      response.body.time_entry
     );
+  }
+
+  async updateTimeEntry(
+    durationInMilliseconds: number,
+    start: Date,
+    text: string,
+    additionalData: ServiceObject[],
+    originalTimeEntry: RedmineTimeEntry
+  ): Promise<TimeEntry> {
+
+    type ProjectObject = {id: number| string, name: string};
+    type ActivityObject = {id: number| string, name: string};
+    let project: ProjectObject|null = null;
+    let issueId;
+    let activity: ActivityObject|null = null;
+
+    const timeEntry = new RedmineTimeEntry(
+        originalTimeEntry.id,
+        originalTimeEntry.projectId,
+        originalTimeEntry.text,
+        originalTimeEntry.start,
+        originalTimeEntry.end,
+        originalTimeEntry.durationInMilliseconds,
+        originalTimeEntry.issueId,
+        originalTimeEntry.activityId,
+        originalTimeEntry.lastUpdated,
+        null
+    );
+
+    for (const data of additionalData) {
+      if (data.type === this._projectsType) {
+        project = {id: data.id, name: data.name};
+      } else if (data.type === this._issuesType) {
+        issueId = data.id;
+      } else if (data.type === this._timeEntryActivitiesType) {
+        activity = {id: data.id, name: data.name};
+      }
+    }
+
+    const timeEntryBody: Record<string, unknown> = {};
+
+    if (issueId) {
+      timeEntryBody.issue_id = issueId;
+    } else if (project) {
+      timeEntryBody.project_id = project.id;
+      timeEntryBody.issue_id = '';
+    }
+
+    if (activity && activity.id != originalTimeEntry.activityId) {
+      timeEntryBody.activity_id = activity.id;
+    }
+
+    if (durationInMilliseconds != originalTimeEntry.durationInMilliseconds) {
+      const hours = durationInMilliseconds / 1000 / 60 / 60;
+      timeEntryBody.hours = (hours === 0.0 || hours > 0.01) ? hours : 0.01;
+    }
+
+    const originalDate = new Date(originalTimeEntry.start);
+    const startDate = new Date(start);
+    originalDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
+    if (Utilities.compare(startDate, originalDate)) {
+      timeEntryBody.spent_on = Utilities.getOnlyDateString(start);
+    }
+
+    if (text != originalTimeEntry.text) {
+      timeEntryBody.comments = text;
+    }
+    try {
+      await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .put(this._timeEntryUri.replace('[id]', originalTimeEntry.originalEntry.id.toString()))
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+              .send({ time_entry: timeEntryBody }),
+      )
+
+      const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
+      return updated ?? timeEntry;
+
+    } catch (error) {
+      //TODO handle and report that update somehow failed - but not critical - will be retried :)
+      return timeEntry;
+    }
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {

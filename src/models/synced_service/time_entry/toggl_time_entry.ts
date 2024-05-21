@@ -9,8 +9,9 @@ export class TogglTimeEntry implements TimeEntry {
   durationInMilliseconds: number;
   tags: string[];
   lastUpdated: Date;
+  originalEntry: any;
 
-  constructor(id: number, projectId: number, text: string, start: Date, end: Date, duration: number, tags: string[], lastUpdated: Date) {
+  constructor(id: number, projectId: number, text: string, start: Date, end: Date, duration: number, tags: string[], lastUpdated: Date, originalEntry: any) {
     this.id = id;
     this.projectId = projectId;
     this.text = text;
@@ -19,6 +20,7 @@ export class TogglTimeEntry implements TimeEntry {
     this.durationInMilliseconds = duration;
     this.tags = tags;
     this.lastUpdated = lastUpdated;
+    this.originalEntry = originalEntry;
   }
 
   // durationInMilliseconds = (): number => this.end.getTime() - this.start.getTime();

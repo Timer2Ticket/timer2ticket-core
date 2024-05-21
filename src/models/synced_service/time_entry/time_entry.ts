@@ -6,4 +6,5 @@ export interface TimeEntry {
   end: Date | number | string;
   durationInMilliseconds: number;
   lastUpdated: Date | number | string;
+  originalEntry: any;
 }

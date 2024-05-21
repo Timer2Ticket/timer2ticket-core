@@ -89,4 +89,6 @@ export interface SyncedService {
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[];
 
   getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null>;
+
+  updateTimeEntry(durationInMilliseconds: number, start: Date, text: string, additionalData: ServiceObject[], originalTimeEntry: TimeEntry): Promise<TimeEntry>;
 }

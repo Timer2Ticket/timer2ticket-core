@@ -12,6 +12,7 @@ import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
+import {Utilities} from "../../shared/utilities";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -345,6 +346,7 @@ export class TogglTrackSyncedService implements SyncedService {
                 timeEntry['duration'] * 1000,
                 timeEntry['tags'],
                 new Date(timeEntry['at']),
+                timeEntry
             ),
         );
       }
@@ -354,15 +356,15 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
-    let start = new Date();
+    const start = new Date();
     start.setMonth(start.getMonth() - 6);
-    let timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
+    const timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
 
     if (timeEntryFromApi === null) {
        return;
     }
 
-    let body =
+    const body =
       [
         {'op': 'replace',
           'path': '/description',
@@ -371,7 +373,7 @@ export class TogglTrackSyncedService implements SyncedService {
       ]
     ;
 
-    let response = await this._retryAndWaitInCaseOfTooManyRequests(
+    const response = await this._retryAndWaitInCaseOfTooManyRequests(
         superagent
             .patch(`${this._workspacesTimeEntriesUri}/${timeEntry?.id}`)
             .auth(this._serviceDefinition.apiKey, 'api_token')
@@ -433,6 +435,7 @@ export class TogglTrackSyncedService implements SyncedService {
           timeEntry['seconds'] * 1000,
           tags,
           new Date(timeEntry['at']),
+          timeEntry
       );
 
       entries.push(
@@ -492,7 +495,96 @@ export class TogglTrackSyncedService implements SyncedService {
       response.body['duration'] * 1000,
       response.body['tags'],
       new Date(response.body['at']),
+      response.body
     );
+  }
+
+  async updateTimeEntry(
+    durationInMilliseconds: number,
+    start: Date,
+    text: string,
+    additionalData: ServiceObject[],
+    originalTimeEntry: TogglTimeEntry
+  ): Promise<TimeEntry> {
+    let projectId;
+    const tags: string[] = [];
+
+    for (const data of additionalData) {
+      if (data.type === this._projectsType) {
+        projectId = data.id;
+      } else {
+        tags.push(data.name);
+      }
+    }
+
+    const originalEntry = new TogglTimeEntry(
+        originalTimeEntry.id,
+        originalTimeEntry.projectId,
+        originalTimeEntry.text,
+        originalTimeEntry.start,
+        originalTimeEntry.end,
+        originalTimeEntry.durationInMilliseconds,
+        originalTimeEntry.tags,
+        originalTimeEntry.lastUpdated,
+        null,
+    )
+
+    delete originalTimeEntry.originalEntry['tag_ids'];
+
+    //project id
+    if (projectId && projectId !== originalTimeEntry.projectId) {
+      //what about the case when project id is null on either side?
+      originalTimeEntry.originalEntry['project_id'] = projectId;
+    }
+
+    //comment
+    if (text != originalTimeEntry.text) {
+      originalTimeEntry.originalEntry['description'] = text;
+    }
+
+    //spent on
+    const originalDate = new Date(originalTimeEntry.start);
+    const startDate = new Date(start);
+    originalDate.setHours(0, 0, 0, 0);
+    startDate.setHours(0, 0, 0, 0);
+    if (Utilities.compare(startDate, originalDate)) {
+      originalTimeEntry.originalEntry['start_date'] = Utilities.getOnlyDateString(start);
+    }
+
+    //duration
+    if (durationInMilliseconds != originalTimeEntry.durationInMilliseconds) {
+      originalTimeEntry.originalEntry['duration'] = Math.round(durationInMilliseconds / 1000)
+      delete originalTimeEntry.originalEntry['stop'];
+    }
+
+    //tags
+   if (new Set(tags) !== new Set(originalTimeEntry.tags)) {
+     originalTimeEntry.originalEntry['tags'] = tags;
+   }
+
+    try {
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .put(`${this._workspacesTimeEntriesUri}/${originalTimeEntry.id}`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+              .send(originalTimeEntry.originalEntry)
+      );
+
+      return new TogglTimeEntry(
+          response.body['id'],
+          response.body['pid'],
+          response.body['description'],
+          new Date(response.body['start']),
+          new Date(response.body['stop']),
+          response.body['duration'] * 1000,
+          response.body['tags'],
+          new Date(response.body['at']),
+          response.body
+      );
+    } catch (error) {
+      //TODO handle error somehow :)
+      return originalEntry;
+    }
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {
