@@ -7,4 +7,5 @@ export interface TimeEntry {
   durationInMilliseconds: number;
   lastUpdated: Date | number | string;
   originalEntry: any;
+  needsConfigJob: boolean;
 }
