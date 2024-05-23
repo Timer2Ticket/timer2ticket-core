@@ -13,12 +13,17 @@ import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
 import {JobLog} from "../models/job_log";
 import {Timer2TicketError} from "../models/timer2TicketError";
+import superagent from "superagent";
+import { Constants } from "../shared/constants";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
    * This job takes all unsynced time entries from services and synces them across all other services
    * Synces time entries, that are identified with the user's mappings
    */
+
+  private needsConfigJob = false;
+
   protected async _doTheJob(): Promise<boolean> {
     let now = new Date();
     const someDaysAgoFilter = new Date(now.setDate(now.getDate() - this._user.config.daysToSync));
@@ -163,6 +168,10 @@ export class TimeEntriesSyncJob extends SyncJob {
           // console.error('err: TESyncJob: b), c), d), e); exception');
         }
       }
+    }
+
+    if (this.needsConfigJob) {
+      await superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
     }
 
     if (operationsOk) {
@@ -475,6 +484,11 @@ export class TimeEntriesSyncJob extends SyncJob {
 
       // lastly created -> update lastUpdate (every created TE will update lastUpdated, but the last created one will be permanent)
       this._updateTimeEntrySyncedObject(timeEntrySyncedObject, createdTimeEntry.lastUpdated, createdTimeEntry.start);
+
+      // check if I need to run config job because the entity used comment prefix as task ID
+      if (serviceDefinitionName === 'Redmine') {
+        this.needsConfigJob = this.needsConfigJob || createdTimeEntry.needsConfigJob;
+      }
     }
     await this.updateJobLog(errors)
     return createdTimeEntry ?? undefined;
