@@ -15,6 +15,7 @@ import { ProjectMapping } from "../models/connection/mapping/project_mapping";
 import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
 import { getIdOfAnotherServiceIdFromLink } from "../shared/ticket2ticket_service";
+import { isTicket2TicketConnection } from "../shared/ticket2ticket_service";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -29,7 +30,7 @@ export class ConfigSyncJob extends SyncJob {
    */
   protected async _doTheJob(): Promise<boolean> {
     console.log('Config sync job started for connection '.concat(this._connection._id.toHexString()));
-    if (this._isTicket2TicketSync()) {
+    if (isTicket2TicketConnection(this._connection)) {
       return await this._doTicket2TicketSync()
     } else {
       return await this._doTimer2TicketSync()
@@ -120,7 +121,6 @@ export class ConfigSyncJob extends SyncJob {
 
     await databaseService.updateJobLog(this._jobLog);
 
-    console.log("Config sync job for connection " + this._connection._id.toHexString() + " finished.");
     return resultOK
   }
 
@@ -490,16 +490,6 @@ export class ConfigSyncJob extends SyncJob {
     return operationsOk;
   }
 
-  /*
-  checkes if we sync timer-tiket or ticket-ticket tools
-  returns true if ticket-ticket, false othewise
-  */
-  private _isTicket2TicketSync() {
-    return (this._connection.firstService.name === 'Jira' || this._connection.firstService.name === 'Redmine')
-      ? (this._connection.secondService.name === 'Jira' || this._connection.secondService.name === 'Redmine')
-      : false
-  }
-
   private async _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Promise<Mapping[]> {
     const firstServiceIssuesWithCustField = firstServiceObjects.filter((o: ServiceObject) => {
       return o.syncCustomFieldValue
@@ -541,13 +531,11 @@ export class ConfigSyncJob extends SyncJob {
                 first ? this._connection.firstService.name : this._connection.secondService.name,
                 firstObject.type)
             )
-            const secondMappingsObject =
-              new MappingsObject(
-                secondObject.id,
-                secondObject.name,
-                first ? this._connection.secondService.name : this._connection.firstService.name,
-                secondObject.type)
-            mapping.mappingsObjects.push(secondMappingsObject)
+            mapping.mappingsObjects.push(new MappingsObject(
+              secondObject.id,
+              secondObject.name,
+              first ? this._connection.secondService.name : this._connection.firstService.name,
+              secondObject.type))
             newMappings.push(mapping)
           }
         }

@@ -2,6 +2,7 @@ export class ServiceObject {
   id: number | string;
   name: string;
   type: string;
+  //id of project in case of Issue type (needed for Jira)
   projectId: number | string | null
   syncCustomFieldValue: number | string | null
 

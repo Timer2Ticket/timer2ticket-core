@@ -171,7 +171,6 @@ app.post('/api/v2/schedule_time_entries_job/:jobLogId([a-zA-Z0-9]{24})', async (
 // Schedule jobs for connection
 app.post('/api/v2/create/:connectionId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => { //    ([a-zA-Z0-9]{24})
     const connectionId = req.params.connectionId;
-    console.log(req.params.connectionId)
     const responseCode = await updateConnection(connectionId, true);
     if (responseCode === null) {
         return res.sendStatus(201);

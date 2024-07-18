@@ -8,10 +8,10 @@ export class Constants {
 
   static mongoDbUrl = process.env.MONGODB_URL || 'mongodb://localhost:27017';
 
-  static sentryDsn = process.env.SENTRY_DSN || 'https://d9e4e19c9f15821d57796be76000be61@o4506110897750016.ingest.sentry.io/4506110899781632';
+  static sentryDsn = process.env.SENTRY_DSN || '';
   static daysToSync = 60;
 
   static defaultWaitDurationInCaseOfTooManyRequestsInMilliseconds = 1500;
 
-  static configObjectMappingMarkedToDeleteTresholdInDays = 1;
+  static configObjectMappingMarkedToDeleteTresholdInDays = process.env.CONFIG_OBJECTS_DELETE_AFTER_DAYS;
 }

@@ -4,10 +4,8 @@ import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
 
 
 export function isTicket2TicketConnection(connection: Connection): boolean {
-    if ((connection.firstService.name === 'Jira' || connection.firstService.name === 'Redmine') &&
-        (connection.secondService.name === 'Jira' || connection.secondService.name === 'Redmine'))
-        return true
-    else return false
+    const ticketTools = ['Jira', 'Redmine']
+    return ticketTools.includes(connection.firstService.name) && ticketTools.includes(connection.secondService.name)
 }
 
 
