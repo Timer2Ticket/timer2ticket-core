@@ -605,11 +605,27 @@ export class RedmineSyncedService implements SyncedService {
 
     const timeEntryBody: Record<string, unknown> = {};
 
-    if (issueId) {
+    if (text && typeof issueId === 'undefined') {
+      // checks if TE comment begins with task id
+      const regex = /^#(?<project_id>\d+)/;
+      const projectId = text.match(regex);
+      if (projectId && projectId.groups) {
+        issueId = projectId.groups.project_id;
+      }
+    }
+
+    if (issueId && issueId != originalTimeEntry.issueId) {
       timeEntryBody.issue_id = issueId;
-    } else if (project) {
+      timeEntryBody.project_id = null;
+    }
+
+    if (typeof issueId === 'undefined') {
+      timeEntryBody.issue_id = null;
+    }
+
+    if (project && project.id != originalTimeEntry.projectId && typeof issueId === 'undefined') {
       timeEntryBody.project_id = project.id;
-      timeEntryBody.issue_id = '';
+      timeEntryBody.issue_id = null;
     }
 
     if (activity && activity.id != originalTimeEntry.activityId) {
