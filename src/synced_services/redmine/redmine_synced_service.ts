@@ -620,11 +620,10 @@ export class RedmineSyncedService implements SyncedService {
     }
 
     if (typeof issueId === 'undefined') {
-      timeEntryBody.issue_id = null;
-    }
+      if (project && project.id != originalTimeEntry.projectId) {
+        timeEntryBody.project_id = project.id;
+      }
 
-    if (project && project.id != originalTimeEntry.projectId && typeof issueId === 'undefined') {
-      timeEntryBody.project_id = project.id;
       timeEntryBody.issue_id = null;
     }
 
