@@ -13,5 +13,5 @@ export class Constants {
 
   static defaultWaitDurationInCaseOfTooManyRequestsInMilliseconds = 1500;
 
-  static configObjectMappingMarkedToDeleteTresholdInDays = process.env.CONFIG_OBJECTS_DELETE_AFTER_DAYS;
+  static configObjectMappingMarkedToDeleteTresholdInDays = process.env.CONFIG_OBJECTS_DELETE_AFTER_DAYS || 7;
 }

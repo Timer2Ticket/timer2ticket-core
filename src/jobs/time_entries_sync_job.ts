@@ -63,7 +63,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       const serviceTimeEntriesWrapper = new ServiceTimeEntriesWrapper(
         serviceDefinition,
         syncedService,
-        await syncedService.getTimeEntries(start, now), //TODO chytat vyjimku pri spatnem dotazu a nastavit result jako "Failed"
+        await syncedService.getTimeEntries(start, now),
       );
 
       serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);

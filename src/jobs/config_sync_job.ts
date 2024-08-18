@@ -79,8 +79,8 @@ export class ConfigSyncJob extends SyncJob {
     const missingMappings: Mapping[] = new Array()
     for (let newMapping of newMappings) {
       const found = this._connection.mappings.find((m: Mapping) => {
-        //needs to be checked if both objects of mapping are same because of m:n mappping
-        //both parts of or ane needed because off possible cross link reference
+        //needs to be checked both ways if objects of mapping are the same because of possible m:n mappping
+        //A (for example jira object) can be saved twice in mappingsObjects[], once in relation with B and once with C (redmine objects), hence you need to check the cross reference
         return (
           (m.mappingsObjects[0].id === newMapping.mappingsObjects[0].id &&
             m.mappingsObjects[1].id === newMapping.mappingsObjects[1].id)
@@ -218,7 +218,7 @@ export class ConfigSyncJob extends SyncJob {
     // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
     const obsoleteMappings: Mapping[] = [];
     const now = new Date();
-    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Number(Constants.configObjectMappingMarkedToDeleteTresholdInDays)));
 
     // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
     for (const mapping of this._connection.mappings) {
