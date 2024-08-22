@@ -35,7 +35,8 @@ export abstract class SyncJob {
         try {
             result = await this._doTheJob();
         } catch (ex: any) {
-            console.log(ex)
+            result = false
+            //TODO setup sentry 
             return false
         }
         JobLog.setToCompleted(this._jobLog, result);
