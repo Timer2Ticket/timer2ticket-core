@@ -39,6 +39,7 @@ export class Connection {
     }
   }
 
+  //used only in timer2ticket connection
   static getPrimaryServiceDefinition(connection: Connection): SyncedServiceDefinition | undefined {
     if (connection.firstService.name === 'Redmine' || connection.firstService.name === 'Jira') {
       return connection.firstService;
@@ -48,7 +49,8 @@ export class Connection {
       return undefined;
     }
   }
-
+  
+  //used only in timer2ticket connection
   static getSecondaryServiceDefinition(connection: Connection): SyncedServiceDefinition {
     if (connection.firstService.name === 'Toggl Track') {
       return connection.firstService;
