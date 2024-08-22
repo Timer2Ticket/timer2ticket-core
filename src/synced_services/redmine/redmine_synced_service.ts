@@ -550,6 +550,11 @@ export class RedmineSyncedService implements SyncedService {
       lastUpdated = date;
     }
 
+    if (response.body.time_entry.project.id != projectId) {
+      lastUpdated = new Date(date.getTime());
+      lastUpdated.setDate(date.getDate() - 1);
+    }
+
 
 
     return new RedmineTimeEntry(
@@ -647,6 +652,16 @@ export class RedmineSyncedService implements SyncedService {
     if (text != originalTimeEntry.text) {
       timeEntryBody.comments = text;
     }
+
+    if (Object.keys(timeEntryBody).length === 0) {
+      if (text.endsWith(" ")) {
+        text = text.trimEnd();
+      } else {
+        text = text + ' ';
+      }
+      timeEntryBody.comments = text;
+    }
+
     try {
       await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
@@ -658,6 +673,12 @@ export class RedmineSyncedService implements SyncedService {
       )
 
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
+      //if project not in mappings resync just in case
+      if (updated && (!project || updated.projectId != project.id)) {
+        const date = new Date(updated.lastUpdated);
+        updated.lastUpdated = new Date(date.getTime());
+        updated.lastUpdated.setDate(date.getDate() - 1);
+      }
       return updated ?? timeEntry;
 
     } catch (error) {
