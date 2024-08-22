@@ -516,8 +516,8 @@ export class ConfigSyncJob extends SyncJob {
         if (firstObject) {
           //check if projects corespond with those that should be paired
           const areInTheProjectPair = this._connection.projectMappings.filter((p: ProjectMapping) => {
-            (p.idFirstService === firstObject.projectId && p.idSecondService === secondObject.projectId)
-              || (p.idFirstService === secondObject.projectId && p.idSecondService === firstObject.projectId)
+            (p.firstServiceProjectId === firstObject.projectId && p.secondServiceProjectId === secondObject.projectId)
+              || (p.firstServiceProjectId === secondObject.projectId && p.secondServiceProjectId === firstObject.projectId)
           })
           if (areInTheProjectPair) {
             const mapping = new Mapping()
@@ -582,6 +582,7 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
     //delete from service
+    //select id of second object and delete it in second service
     const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
     const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
     mappingsToDelete.forEach(mapping => {
@@ -590,7 +591,7 @@ export class ConfigSyncJob extends SyncJob {
       try {
         syncedService.deleteServiceObject(secondaryMappingObject.id, secondaryMappingObject.type)
       } catch (ex) {
-        //this can fail in case wrong service is called. (Jira and Redmine do not supprot deleting objects)
+        //this can fail in case wrong service is called. (Jira and Redmine do not support deleting objects)
       }
     })
 

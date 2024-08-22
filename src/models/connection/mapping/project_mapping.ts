@@ -1,9 +1,9 @@
 export class ProjectMapping {
-    idFirstService!: number | string
-    idSecondService!: number | string
+    firstServiceProjectId!: number | string
+    secondServiceProjectId!: number | string
 
-    constructor(idFirstService: number | string, idSecondService: number | string) {
-        this.idFirstService = idFirstService
-        this.idSecondService = idSecondService
+    constructor(firstServiceProjectId: number | string, secondServiceProjectId: number | string) {
+        this.firstServiceProjectId = firstServiceProjectId
+        this.secondServiceProjectId = secondServiceProjectId
     }
 }
