@@ -548,6 +548,11 @@ export class RedmineSyncedService implements SyncedService {
       lastUpdated = date;
     }
 
+    if (response.body.time_entry.project.id != projectId) {
+      lastUpdated = new Date(date.getTime());
+      lastUpdated.setDate(date.getDate() - 1);
+    }
+
 
 
     return new RedmineTimeEntry(
@@ -604,11 +609,26 @@ export class RedmineSyncedService implements SyncedService {
 
     const timeEntryBody: Record<string, unknown> = {};
 
-    if (issueId) {
+    if (text && typeof issueId === 'undefined') {
+      // checks if TE comment begins with task id
+      const regex = /^#(?<project_id>\d+)/;
+      const projectId = text.match(regex);
+      if (projectId && projectId.groups) {
+        issueId = projectId.groups.project_id;
+      }
+    }
+
+    if (issueId && issueId != originalTimeEntry.issueId) {
       timeEntryBody.issue_id = issueId;
-    } else if (project) {
-      timeEntryBody.project_id = project.id;
-      timeEntryBody.issue_id = '';
+      timeEntryBody.project_id = null;
+    }
+
+    if (typeof issueId === 'undefined') {
+      if (project && project.id != originalTimeEntry.projectId) {
+        timeEntryBody.project_id = project.id;
+      }
+
+      timeEntryBody.issue_id = null;
     }
 
     if (activity && activity.id != originalTimeEntry.activityId) {
@@ -631,6 +651,16 @@ export class RedmineSyncedService implements SyncedService {
     if (text != originalTimeEntry.text) {
       timeEntryBody.comments = text;
     }
+
+    if (Object.keys(timeEntryBody).length === 0) {
+      if (text.endsWith(" ")) {
+        text = text.trimEnd();
+      } else {
+        text = text + ' ';
+      }
+      timeEntryBody.comments = text;
+    }
+
     try {
       await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
@@ -642,6 +672,12 @@ export class RedmineSyncedService implements SyncedService {
       )
 
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
+      //if project not in mappings resync just in case
+      if (updated && (!project || updated.projectId != project.id)) {
+        const date = new Date(updated.lastUpdated);
+        updated.lastUpdated = new Date(date.getTime());
+        updated.lastUpdated.setDate(date.getDate() - 1);
+      }
       return updated ?? timeEntry;
 
     } catch (error) {
