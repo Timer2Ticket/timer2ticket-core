@@ -544,8 +544,6 @@ export class RedmineSyncedService implements SyncedService {
     if (usedTextId) {
       lastUpdated = new Date(date.getTime());
       lastUpdated.setDate(date.getDate() - 1);
-      // schedule config job to force update mappings to prepare mappings for sync from redmine
-      await superagent.post(`http://localhost:${Constants.appPort}/api/schedule_config_job/${this._user?._id}`);
     } else {
       lastUpdated = date;
     }
@@ -562,7 +560,8 @@ export class RedmineSyncedService implements SyncedService {
       response.body.time_entry['issue'] ? response.body.time_entry['issue']['id'] : undefined,
       response.body.time_entry['activity']['id'],
       lastUpdated,
-      response.body.time_entry
+      response.body.time_entry,
+      usedTextId
     );
   }
 
