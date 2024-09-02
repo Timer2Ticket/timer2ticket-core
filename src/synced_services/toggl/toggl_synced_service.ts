@@ -6,11 +6,12 @@ import { ServiceObject } from "../../models/synced_service/service_object/servic
 import { Mapping } from "../../models/connection/mapping/mapping";
 import { MappingsObject } from "../../models/connection/mapping/mappings_object";
 import { Constants } from "../../shared/constants";
-import {Timer2TicketError} from "../../models/timer2TicketError";
-import {SentryService} from "../../shared/sentry_service";
-import {ErrorService} from "../../shared/error_service";
-import {SyncedServiceDefinition} from "../../models/connection/config/synced_service_definition";
-import {Connection} from "../../models/connection/connection";
+import { Timer2TicketError } from "../../models/timer2TicketError";
+import { SentryService } from "../../shared/sentry_service";
+import { ErrorService } from "../../shared/error_service";
+import { SyncedServiceDefinition } from "../../models/connection/config/synced_service_definition";
+import { Connection } from "../../models/connection/connection";
+import { WebhookEventData } from "../../models/connection/config/webhook_event_data";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _syncedServiceDefinition: SyncedServiceDefinition;
@@ -120,12 +121,14 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   async deleteServiceObject(id: string | number, objectType: string): Promise<boolean> {
+    let result
     switch (objectType) {
       case this._projectsType:
-        return await this._deleteProject(id);
+        result = await this._deleteProject(id);
       default:
-        return await this._deleteTag(id);
+        result = await this._deleteTag(id);
     }
+    return result
   }
 
   getFullNameForServiceObject(serviceObject: ServiceObject): string {
@@ -160,9 +163,9 @@ export class TogglTrackSyncedService implements SyncedService {
     let response;
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._projectsUri)
-              .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+        superagent
+          .get(this._projectsUri)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getAllProjects');
@@ -200,7 +203,7 @@ export class TogglTrackSyncedService implements SyncedService {
       superagent
         .put(`${this._projectsUri}/${objectId}`)
         .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
-        .send({ name: this.getFullNameForServiceObject(project), active: true  })
+        .send({ name: this.getFullNameForServiceObject(project), active: true })
     );
 
     return new ServiceObject(response.body['id'], response.body['name'], this._projectsType);
@@ -225,9 +228,9 @@ export class TogglTrackSyncedService implements SyncedService {
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._tagsUri)
-              .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+        superagent
+          .get(this._tagsUri)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getAllTags');
@@ -279,12 +282,17 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   private async _deleteTag(id: string | number): Promise<boolean> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .delete(`${this._tagsUri}/${id}`)
-        .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
-    );
-
+    let response
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .delete(`${this._tagsUri}/${id}`)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+      );
+    } catch (ex) {
+      this.handleResponseException(ex, 'deleteTag');
+      return false
+    }
     return response.ok;
   }
 
@@ -307,10 +315,10 @@ export class TogglTrackSyncedService implements SyncedService {
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._meTimeEntriesUri)
-              .query(queryParams)
-              .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+        superagent
+          .get(this._meTimeEntriesUri)
+          .query(queryParams)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getTimeEntries')
@@ -319,18 +327,18 @@ export class TogglTrackSyncedService implements SyncedService {
 
 
     response.body?.forEach((timeEntry: never) => {
-      if(timeEntry['workspace_id'] === this._syncedServiceDefinition.config.workspace?.id) {
+      if (timeEntry['workspace_id'] === this._syncedServiceDefinition.config.workspace?.id) {
         entries.push(
-            new TogglTimeEntry(
-                timeEntry['id'],
-                timeEntry['project_id'],
-                timeEntry['description'],
-                new Date(timeEntry['start']),
-                new Date(timeEntry['stop']),
-                timeEntry['duration'] * 1000,
-                timeEntry['tags'],
-                new Date(timeEntry['at']),
-            ),
+          new TogglTimeEntry(
+            timeEntry['id'],
+            timeEntry['project_id'],
+            timeEntry['description'],
+            new Date(timeEntry['start']),
+            new Date(timeEntry['stop']),
+            timeEntry['duration'] * 1000,
+            timeEntry['tags'],
+            new Date(timeEntry['at']),
+          ),
         );
       }
     });
@@ -356,10 +364,10 @@ export class TogglTrackSyncedService implements SyncedService {
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._reportsUri)
-              .query(queryParams)
-              .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+        superagent
+          .get(this._reportsUri)
+          .query(queryParams)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getTimeEntryById');
@@ -485,18 +493,18 @@ export class TogglTrackSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
-    if (ex != undefined && (ex.status === 403 || ex.status === 401) ) {
+    if (ex != undefined && (ex.status === 403 || ex.status === 401)) {
 
       const error = this._errorService.createTogglError(ex);
 
       const context = [
-          this._sentryService.createExtraContext("Exception", ex),
-          this._sentryService.createExtraContext("Status_code", ex.status)
+        this._sentryService.createExtraContext("Exception", ex),
+        this._sentryService.createExtraContext("Status_code", ex.status)
       ]
 
-      error.data ="API key error. Please check if you API key is correct";
+      error.data = "API key error. Please check if you API key is correct";
       const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
-      this._sentryService.logTogglError(message , context);
+      this._sentryService.logTogglError(message, context);
       this.errors.push(error);
 
       // console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
@@ -510,5 +518,66 @@ export class TogglTrackSyncedService implements SyncedService {
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
 
+  }
+
+
+  async getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null> {
+
+    const queryParams = {
+      time_entry_ids: Number(webhookObject.id),
+      workspace_id: this._syncedServiceDefinition.config.workspace?.id,
+      user_ids: this._syncedServiceDefinition.config.userId,
+      user_agent: 'Timer2Ticket',
+      page: 0,
+    };
+
+    const entries: TogglTimeEntry[] = [];
+    let response;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .get(this._reportsUri)
+          .query(queryParams)
+          .auth(this._syncedServiceDefinition.config.apiKey, 'api_token')
+      );
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getObjectFromWebhook');
+      return null;
+    }
+    const tags = await this._getAllTags()
+    if (!tags || tags === true)
+      return null
+
+    let myTag
+    response.body?.data.forEach((timeEntry: never) => {
+      entries.push(
+        new TogglTimeEntry(
+          timeEntry['id'],
+          timeEntry['pid'],
+          timeEntry['description'],
+          new Date(timeEntry['start']),
+          new Date(timeEntry['end']),
+          timeEntry['dur'],
+          timeEntry['tags'],
+          new Date(timeEntry['updated']),
+        ),
+      );
+      const tagsFromResponse: string[] = timeEntry['tags']
+      for (const tag of tags) {
+        const found = tagsFromResponse.find(tagFromResponse => {
+          return tag.name === tagFromResponse
+        })
+        if (found) {
+          myTag = tag
+          break
+        }
+      }
+    });
+    if (!myTag || entries.length !== 1) {
+      return null
+    }
+
+    return [myTag, entries[0]]
   }
 }

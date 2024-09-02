@@ -3,7 +3,7 @@ import { Collection, Db, MongoClient, ObjectId } from "mongodb";
 import { User } from '../models/user/user';
 import { TimeEntrySyncedObject } from '../models/synced_service/time_entry_synced_object/time_entry_synced_object';
 import { JobLog } from '../models/job_log';
-import {Connection} from "../models/connection/connection";
+import { Connection } from "../models/connection/connection";
 
 export class DatabaseService {
 
@@ -119,10 +119,12 @@ export class DatabaseService {
    * @param connection
    */
   async updateConnectionConfigSyncJobLastDone(connection: Connection): Promise<boolean> {
-    return this._updateConnectionPartly(connection, { $set: {
-      "configSyncJobDefinition.lastJobTime": connection.configSyncJobDefinition.lastJobTime,
-        "configSyncJobDefinition.status": connection.configSyncJobDefinition.status ,
-    } });
+    return this._updateConnectionPartly(connection, {
+      $set: {
+        "configSyncJobDefinition.lastJobTime": connection.configSyncJobDefinition.lastJobTime,
+        "configSyncJobDefinition.status": connection.configSyncJobDefinition.status,
+      }
+    });
   }
 
   /**
@@ -130,10 +132,12 @@ export class DatabaseService {
    * @param connection
    */
   async updateConnectionTimeEntrySyncJobLastDone(connection: Connection): Promise<boolean> {
-    return this._updateConnectionPartly(connection, { $set: {
+    return this._updateConnectionPartly(connection, {
+      $set: {
         "timeEntrySyncJobDefinition.lastJobTime": connection.timeEntrySyncJobDefinition.lastJobTime,
         "timeEntrySyncJobDefinition.status": connection.timeEntrySyncJobDefinition.status,
-      } });
+      }
+    });
   }
 
   /**
@@ -217,25 +221,25 @@ export class DatabaseService {
     let tesoId;
     if (timeEntrySyncedObject._id instanceof ObjectId) {
       tesoId = timeEntrySyncedObject._id;
-      console.log('[ORM] tesoId je ObjectId s value='.concat(tesoId.toHexString()));
+      // console.log('[ORM] tesoId je ObjectId s value='.concat(tesoId.toHexString()));
     } else {
       tesoId = new ObjectId(timeEntrySyncedObject._id);
-      console.log('[ORM] tesoId je string s value='.concat(tesoId.toHexString()));
+      // console.log('[ORM] tesoId je string s value='.concat(tesoId.toHexString()));
     }
     const filterQuery = { _id: tesoId };
 
     const result = await this._timeEntrySyncedObjectsCollection.updateOne(
-        filterQuery,
-        {
-          $set: {
-            "archived": true
-          }
+      filterQuery,
+      {
+        $set: {
+          "archived": true
         }
+      }
     );
 
-    console.log(
-        `${result.matchedCount} document(s) matched the filter _id=${tesoId.toHexString()}, updated ${result.modifiedCount} document(s)`
-    );
+    // console.log(
+    //     `${result.matchedCount} document(s) matched the filter _id=${tesoId.toHexString()}, updated ${result.modifiedCount} document(s)`
+    // );
     return result.modifiedCount === 1 ? true : null;
   }
 
@@ -261,14 +265,13 @@ export class DatabaseService {
     return result.result.ok === 1;
   }
 
-  async getTimeEntrySyncedObjectForArchiving(steoId: number | string, serviceName: string, userIdInput: string | ObjectId): Promise<TimeEntrySyncedObject | null>
-  {
+  async getTimeEntrySyncedObjectForArchiving(steoId: number | string, serviceName: string, userIdInput: string | ObjectId): Promise<TimeEntrySyncedObject | null> {
     if (!this._timeEntrySyncedObjectsCollection) return null;
 
     if (userIdInput instanceof String) {
       userIdInput = new ObjectId(userIdInput);
     }
-    const filterQuery = { "serviceTimeEntryObjects": { $elemMatch: { "id": steoId, "service": serviceName}}, "userId": userIdInput};
+    const filterQuery = { "serviceTimeEntryObjects": { $elemMatch: { "id": steoId, "service": serviceName } }, "userId": userIdInput };
     return this._timeEntrySyncedObjectsCollection.findOne(filterQuery);
   }
 

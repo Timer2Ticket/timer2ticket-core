@@ -1,7 +1,8 @@
 import { ObjectId } from 'mongodb';
-import {Mapping} from "./mapping/mapping";
-import {SyncJobDefinition} from "./config/sync_job_definition";
-import {SyncedServiceDefinition} from "./config/synced_service_definition";
+import { Mapping } from "./mapping/mapping";
+import { SyncJobDefinition } from "./config/sync_job_definition";
+import { SyncedServiceDefinition } from "./config/synced_service_definition";
+import { ProjectMapping } from './mapping/project_mapping';
 
 export class Connection {
   // Mongo
@@ -22,6 +23,7 @@ export class Connection {
   deleteTimestamp!: number | null;
   createdTimestamp!: number;
   mappings!: Mapping[];
+  projectMappings!: ProjectMapping[];
 
   static getConnectionBetweenString(connection: Connection): string {
     return `${SyncedServiceDefinition.getSyncServiceName(connection.firstService)} - ${SyncedServiceDefinition.getSyncServiceName(connection.secondService)}`;
@@ -37,20 +39,22 @@ export class Connection {
     }
   }
 
+  //used only in timer2ticket connection
   static getPrimaryServiceDefinition(connection: Connection): SyncedServiceDefinition | undefined {
-    if (connection.firstService.name === 'Redmine') {
+    if (connection.firstService.name === 'Redmine' || connection.firstService.name === 'Jira') {
       return connection.firstService;
-    } else if (connection.secondService.name === 'Redmine') {
+    } else if (connection.secondService.name === 'Redmine' || connection.secondService.name === 'Jira') {
       return connection.secondService;
     } else {
       return undefined;
     }
   }
-
+  
+  //used only in timer2ticket connection
   static getSecondaryServiceDefinition(connection: Connection): SyncedServiceDefinition {
-    if (connection.firstService.name !== 'Redmine') {
+    if (connection.firstService.name === 'Toggl Track') {
       return connection.firstService;
-    } else if (connection.secondService.name !== 'Redmine') {
+    } else if (connection.secondService.name === 'Toggl Track') {
       return connection.secondService;
     } else {
       throw "Cannot occur because two same services cannot be connected"

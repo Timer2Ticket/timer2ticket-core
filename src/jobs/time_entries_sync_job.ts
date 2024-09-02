@@ -8,12 +8,12 @@ import { SyncedService } from "../synced_services/synced_service";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { MappingsObject } from "../models/connection/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
-import {captureException} from "@sentry/node";
+import { captureException } from "@sentry/node";
 import * as Sentry from "@sentry/node";
-import {JobLog} from "../models/job_log";
-import {Timer2TicketError} from "../models/timer2TicketError";
-import {Constants} from "../shared/constants";
-import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
+import { JobLog } from "../models/job_log";
+import { Timer2TicketError } from "../models/timer2TicketError";
+import { Constants } from "../shared/constants";
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 
 export class TimeEntriesSyncJob extends SyncJob {
   /**
@@ -36,7 +36,6 @@ export class TimeEntriesSyncJob extends SyncJob {
     start.setMinutes(0);
 
     let operationsOk = true;
-
     // Need to load all time entries (TE) for each service
     // Try to find time entry in timeEntrySyncedObjects (TESOs) from DB
     // Scenarios:
@@ -172,6 +171,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     await this.updateConnectionConfigSyncJobLastDone(operationsOk);
 
+
     console.log("Time entry sync job for connection " + this._connection._id.toHexString() + " finished.");
     return operationsOk;
   }
@@ -207,7 +207,6 @@ export class TimeEntriesSyncJob extends SyncJob {
     );
 
     const otherServicesMappingsObjects = timeEntryOriginServiceWrapper.syncedService.extractMappingsObjectsFromTimeEntry(timeEntry, this._connection.mappings);
-
     if (otherServicesMappingsObjects.length === 0) {
       // TE sync is not required (e.g. not project selected etc.)
       return null;
@@ -388,8 +387,7 @@ export class TimeEntriesSyncJob extends SyncJob {
     return true;
   }
 
-  private async updateJobLog(errors: Timer2TicketError[])
-  {
+  private async updateJobLog(errors: Timer2TicketError[]) {
     this._jobLog.errors.concat(errors)
     const updated = await databaseService.updateJobLog(this._jobLog);
     if (updated instanceof JobLog) {

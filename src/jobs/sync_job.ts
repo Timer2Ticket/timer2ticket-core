@@ -1,9 +1,9 @@
-import {JobLog} from "../models/job_log";
-import {User} from "../models/user/user";
-import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/error_service";
-import {Connection} from "../models/connection/connection";
-import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
+import { JobLog } from "../models/job_log";
+import { User } from "../models/user/user";
+import { SentryService } from "../shared/sentry_service";
+import { ErrorService } from "../shared/error_service";
+import { Connection } from "../models/connection/connection";
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
 
 export abstract class SyncJob {
     protected _user: User;
@@ -31,7 +31,14 @@ export abstract class SyncJob {
 
     async start(): Promise<boolean> {
         JobLog.setToRunning(this._jobLog);
-        const result = await this._doTheJob();
+        let result
+        try {
+            result = await this._doTheJob();
+        } catch (ex: any) {
+            result = false
+            //TODO setup sentry 
+            return false
+        }
         JobLog.setToCompleted(this._jobLog, result);
         return result;
     }

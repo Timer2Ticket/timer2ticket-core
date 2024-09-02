@@ -8,9 +8,14 @@ import { Utilities } from "../shared/utilities";
 import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
-import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
-import {Connection} from "../models/connection/connection";
-import {SyncedServiceDefinition} from "../models/connection/config/synced_service_definition";
+import { TimeEntrySyncedObject } from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import { Connection } from "../models/connection/connection";
+import { SyncedServiceDefinition } from "../models/connection/config/synced_service_definition";
+import { ProjectMapping } from "../models/connection/mapping/project_mapping";
+import { jiraSyncedService } from "../synced_services/jira/jira_synced_service";
+import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
+import { getIdOfAnotherServiceIdFromLink } from "../shared/ticket2ticket_service";
+import { isTicket2TicketConnection } from "../shared/ticket2ticket_service";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -25,7 +30,101 @@ export class ConfigSyncJob extends SyncJob {
    */
   protected async _doTheJob(): Promise<boolean> {
     console.log('Config sync job started for connection '.concat(this._connection._id.toHexString()));
+    if (isTicket2TicketConnection(this._connection)) {
+      return await this._doTicket2TicketSync()
+    } else {
+      return await this._doTimer2TicketSync()
+    }
+  }
 
+  /*
+    Does sync between 2 project tools config objects
+    Downloads all config objects, creates pairs based on selected mapping custom field,
+    creates new and deletes deleted mappings
+  */
+  private async _doTicket2TicketSync() {
+    //get synced services
+    const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
+    const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
+    //get config objects
+    const firstServiceObjectsToSync = await firstSyncedService.getAllServiceObjects(this._connection.firstService.config.customField?.id)
+    const secondServiceObjectsToSync = await secondSyncedService.getAllServiceObjects(this._connection.secondService.config.customField?.id)
+    if (typeof firstServiceObjectsToSync === "boolean" || typeof secondServiceObjectsToSync === "boolean") {
+      const message = `Problem occurred while getting ${firstServiceObjectsToSync === false ? 'first' : 'second'} service objects.`;
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
+      return false;
+    }
+    //filter only issues with 
+    const firstServiceIssuesTosync = firstServiceObjectsToSync.filter((o: ServiceObject) => {
+      return o.type === 'issue'
+    })
+    const secondServiceIssuesTosync = secondServiceObjectsToSync.filter((o: ServiceObject) => {
+      return o.type === 'issue'
+    })
+    let newMappings: Mapping[] = []
+    try {
+      newMappings = await this._createTicket2TicketIssueMappings(firstServiceIssuesTosync, secondServiceIssuesTosync)
+    } catch (e: any) {
+      const message = `Problem occured while creating Mappings from remote services`
+      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateConnectionConfigSyncJobLastDone(false);
+      return false
+    }
+    // Check mappings, if something is wrong, fix it
+    // Scenarios (based on objects from primary service):
+
+    // a) Mapping is missing
+    //    => create mapping
+    const missingMappings: Mapping[] = new Array()
+    for (let newMapping of newMappings) {
+      const found = this._connection.mappings.find((m: Mapping) => {
+        //needs to be checked both ways if objects of mapping are the same because of possible m:n mappping
+        //A (for example jira object) can be saved twice in mappingsObjects[], once in relation with B and once with C (redmine objects), hence you need to check the cross reference
+        return (
+          (m.mappingsObjects[0].id === newMapping.mappingsObjects[0].id &&
+            m.mappingsObjects[1].id === newMapping.mappingsObjects[1].id)
+          || (m.mappingsObjects[0].id === newMapping.mappingsObjects[1].id &&
+            m.mappingsObjects[1].id === newMapping.mappingsObjects[0].id)
+        )
+      })
+      if (!found) {
+        missingMappings.push(newMapping)
+      }
+    }
+
+    // c) Mapping is there, but object is not there (in primary service)
+    //    => delete mapping
+    const mappingsToDelete: Mapping[] = new Array()
+    for (let oldMapping of this._connection.mappings) {
+      const found = newMappings.find((m: Mapping) => {
+        return m.primaryObjectId === oldMapping.primaryObjectId
+      })
+      if (!found) {
+        mappingsToDelete.push(oldMapping)
+      }
+    }
+
+    let resultOK = true
+    //remove old mappings
+    resultOK = await this._deleteObsoleteMappingsAndTESOs(mappingsToDelete)
+
+
+    //add new mappings
+    this._connection.mappings.push(...missingMappings)
+
+    await this.updateConnectionConfigSyncJobLastDone(resultOK);
+
+    // persist changes in the mappings
+    // even if some api operations were not ok, persist changes to the mappings - better than nothing
+    await databaseService.updateConnectionMappings(this._connection);
+
+    await databaseService.updateJobLog(this._jobLog);
+
+    return resultOK
+  }
+
+  private async _doTimer2TicketSync() {
     const primaryServiceDefinition: SyncedServiceDefinition | undefined = Connection.getPrimaryServiceDefinition(this._connection);
 
     if (!primaryServiceDefinition) {
@@ -58,10 +157,10 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     const secondaryServiceWrapper = new SyncedServiceWrapper(
-        secondaryServiceDefinition,
-        syncedService,
-        allServiceObjects,
-      );
+      secondaryServiceDefinition,
+      syncedService,
+      allServiceObjects,
+    );
 
     // Check primary objects and mappings, if something is wrong, fix it
     // Scenarios (based on objects from primary service):
@@ -119,10 +218,23 @@ export class ConfigSyncJob extends SyncJob {
     // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
     const obsoleteMappings: Mapping[] = [];
     const now = new Date();
-    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Number(Constants.configObjectMappingMarkedToDeleteTresholdInDays)));
 
     // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
     for (const mapping of this._connection.mappings) {
+      // delete object from secondary service because it was deleted in the primary
+      const primaryObjectExists = objectsToSync.find((obj: ServiceObject) => {
+        return obj.id === mapping.primaryObjectId
+      })
+      if (!primaryObjectExists) {
+        //delete secondary object in the service
+        const secondaryServiceObject = mapping.mappingsObjects[0].service === "Toggl Track" ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+        //console.log(`about to delete obj from ${secondaryServiceObject.service} with Id ${secondaryServiceObject.id} and name ${secondaryServiceObject.name}`)
+
+        //We do not want to delete immediately, it will be deleted later
+        //await syncedService.deleteServiceObject(secondaryServiceObject.id, 'tag')
+      }
+
       const isObsolete = checkedMappings.find(checkedMapping => checkedMapping === mapping) === undefined;
       if (isObsolete && mapping.markedToDelete) {
         // check if days passed from when it was markedToDelete
@@ -252,7 +364,7 @@ export class ConfigSyncJob extends SyncJob {
     if (serviceWrapper) {
       // firstly create object in the service, then create serviceObject with newly acquired id
       const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
-      const secondaryMappingsObject =new MappingsObject(newObject.id, newObject.name, secondaryServiceDefinition.name, newObject.type);
+      const secondaryMappingsObject = new MappingsObject(newObject.id, newObject.name, secondaryServiceDefinition.name, newObject.type);
       mapping.mappingsObjects.push(secondaryMappingsObject);
     }
 
@@ -272,7 +384,7 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     const secondaryServiceDefinition = Connection.getSecondaryServiceDefinition(this._connection);
-    if(!serviceWrapper) {
+    if (!serviceWrapper) {
       return true;
     }
     const mappingsObject = mapping.mappingsObjects.find(mappingObject => mappingObject.service === secondaryServiceDefinition.name);
@@ -289,7 +401,7 @@ export class ConfigSyncJob extends SyncJob {
       // scenario b), d), f)
       // check if mapping corresponds with real object in the service
       const objectBasedOnMapping = await serviceWrapper.allServiceObjects
-          .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
+        .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
 
       if (!objectBasedOnMapping) {
         // scenario f), create new object in the service
@@ -301,7 +413,7 @@ export class ConfigSyncJob extends SyncJob {
         // scenario b)
         // name is incorrect => maybe mapping was outdated or/and real object was outdated
         const updatedObject = await serviceWrapper.syncedService.updateServiceObject(
-            mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
+          mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
         );
         // console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
         mappingsObject.name = updatedObject.name;
@@ -326,7 +438,7 @@ export class ConfigSyncJob extends SyncJob {
       // For debugging purposes catching all errors here.
       const context = [
         this._sentryService.createExtraContext("Status_code", ex.status),
-        this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
+        this._sentryService.createExtraContext('Object_to_sync', { 'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type })
       ]
       this._sentryService.logError(ex, context);
       // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
@@ -335,7 +447,7 @@ export class ConfigSyncJob extends SyncJob {
       newObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
       if (!newObject) {
         const context = [
-          this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
+          this._sentryService.createExtraContext('Object_to_sync', { 'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type })
         ]
         this._sentryService.logError(ex, context);
         throw ex;
@@ -365,7 +477,7 @@ export class ConfigSyncJob extends SyncJob {
           operationOk = true;
         } else {
           const context = [
-            this._sentryService.createExtraContext('Mapping to delete', {'id': mappingObject.id, 'type': mappingObject.type})
+            this._sentryService.createExtraContext('Mapping to delete', { 'id': mappingObject.id, 'type': mappingObject.type })
           ]
           this._sentryService.logError(ex);
           // console.error('err: ConfigSyncJob: delete; exception');
@@ -376,6 +488,122 @@ export class ConfigSyncJob extends SyncJob {
 
     // if any of those operations did fail, return false
     return operationsOk;
+  }
+
+  private async _createTicket2TicketIssueMappings(firstServiceObjects: ServiceObject[], secondServiceObjects: ServiceObject[]): Promise<Mapping[]> {
+    const firstServiceIssuesWithCustField = firstServiceObjects.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
+    const secondServiceIssuesWithCustField = secondServiceObjects.filter((o: ServiceObject) => {
+      return o.syncCustomFieldValue
+    })
+    const newMappings: Mapping[] = new Array()
+    const firstSecond = await this._createTicket2TicketMapping(firstServiceObjects, secondServiceIssuesWithCustField, true)
+    const secondFirst = await this._createTicket2TicketMapping(secondServiceObjects, firstServiceIssuesWithCustField, false)
+    newMappings.push(...firstSecond)
+    newMappings.push(...secondFirst)
+    return newMappings
+  }
+
+  private async _createTicket2TicketMapping(firstServiceObjects: ServiceObject[], secondServiceObjectsWithCustField: ServiceObject[], first: boolean): Promise<Mapping[]> {
+    const newMappings: Mapping[] = new Array()
+    for (const secondObject of secondServiceObjectsWithCustField) {
+      const idOfFirst = await getIdOfAnotherServiceIdFromLink(first ? this._connection.firstService : this._connection.secondService, secondObject.syncCustomFieldValue)
+      if (idOfFirst) {//'second objects has link to the first => first is primary
+        const firstObject = firstServiceObjects.find((o: ServiceObject) => {
+          return o.id == idOfFirst
+        })
+        if (firstObject) {
+          //check if projects corespond with those that should be paired
+          const areInTheProjectPair = this._connection.projectMappings.filter((p: ProjectMapping) => {
+            (p.firstServiceProjectId === firstObject.projectId && p.secondServiceProjectId === secondObject.projectId)
+              || (p.firstServiceProjectId === secondObject.projectId && p.secondServiceProjectId === firstObject.projectId)
+          })
+          if (areInTheProjectPair) {
+            const mapping = new Mapping()
+            mapping.primaryObjectId = firstObject.id
+            mapping.primaryObjectType = firstObject.type
+            mapping.name = firstObject.name
+            mapping.mappingsObjects.push(
+              new MappingsObject(
+                firstObject.id,
+                firstObject.name,
+                first ? this._connection.firstService.name : this._connection.secondService.name,
+                firstObject.type)
+            )
+            mapping.mappingsObjects.push(new MappingsObject(
+              secondObject.id,
+              secondObject.name,
+              first ? this._connection.secondService.name : this._connection.firstService.name,
+              secondObject.type))
+            newMappings.push(mapping)
+          }
+        }
+      }
+    }
+    return newMappings
+  }
+
+  private async _deleteObsoleteMappingsAndTESOs(mappingsToDelete: Mapping[]): Promise<boolean> {
+    let success = true
+    const timeEntriesToArchive: TimeEntrySyncedObject[] = new Array()
+    //find TESOs to Archive
+    for (let mapping of mappingsToDelete) {
+      const firstService = SyncedServiceCreator.create(this._connection.firstService)
+      const secondService = SyncedServiceCreator.create(this._connection.secondService)
+      const TESOs: TimeEntry[] = new Array()
+      const TESOsFromFirst = await firstService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
+      const TESOsFromSecond = await secondService.getTimeEntriesRelatedToMappingObjectForConnection(mapping, this._connection);
+      if (TESOsFromFirst)
+        TESOs.push(...TESOsFromFirst)
+      if (TESOsFromSecond)
+        TESOs.push(...TESOsFromSecond)
+      if (TESOs) {
+        for (let i = 0; i < TESOs.length; i++) {
+          const timeEntryFromApi = TESOs[i]
+          const firstOrSecond = TESOsFromFirst ? i < TESOsFromFirst.length : false
+          const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(
+            timeEntryFromApi.id,
+            firstOrSecond ? this._connection.firstService.name : this._connection.secondService.name,
+            this._user._id);
+          if (foundTESO) {
+            timeEntriesToArchive.push(foundTESO);
+          }
+        }
+      } else {
+        success = false
+      }
+    }
+    //deleteTESOs
+    for (const timeEntryToArchive of timeEntriesToArchive) {
+      const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
+      if (!updateResponse) {
+        success = false
+      }
+    }
+    //delete from service
+    //select id of second object and delete it in second service
+    const firstSyncedService = SyncedServiceCreator.create(this._connection.firstService)
+    const secondSyncedService = SyncedServiceCreator.create(this._connection.secondService)
+    mappingsToDelete.forEach(mapping => {
+      const secondaryMappingObject = mapping.mappingsObjects[0].id === mapping.primaryObjectId ? mapping.mappingsObjects[0] : mapping.mappingsObjects[1]
+      const syncedService = secondaryMappingObject.name === this._connection.firstService.name ? firstSyncedService : secondSyncedService
+      try {
+        syncedService.deleteServiceObject(secondaryMappingObject.id, secondaryMappingObject.type)
+      } catch (ex) {
+        //this can fail in case wrong service is called. (Jira and Redmine do not support deleting objects)
+      }
+    })
+
+    //remove Mappings from this.connection...mappings
+    this._connection.mappings
+      = this._connection
+        .mappings
+        .filter(
+          mapping => mappingsToDelete.find(obsolete => obsolete === mapping)
+            === undefined);
+
+    return success
   }
 }
 

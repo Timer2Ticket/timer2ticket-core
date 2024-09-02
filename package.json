@@ -4,7 +4,8 @@
   "description": "Synchronization middleware for project management tool and time tracking application.",
   "main": "dist/app.js",
   "scripts": {
-    "start": "tsc --project . && nodemon ./dist/app.js",
+    "start": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon ./dist/app.js\"",
+    "test": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon ./dist/test.js\"",
     "start-fast": "npm run build && node ./dist/app.js",
     "build": "tsc --build"
   },
@@ -20,6 +21,7 @@
     "@typescript-eslint/parser": "^4.15.0",
     "eslint": "^7.20.0",
     "tsc-watch": "^4.2.9",
+    "nodemon": "^3.0.2",
     "typescript": "^4.2.3"
   },
   "dependencies": {

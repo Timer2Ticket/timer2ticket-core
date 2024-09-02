@@ -2,10 +2,11 @@ import { Mapping } from "../models/connection/mapping/mapping";
 import { MappingsObject } from "../models/connection/mapping/mappings_object";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
 import { TimeEntry } from "../models/synced_service/time_entry/time_entry";
-import {Timer2TicketError} from "../models/timer2TicketError";
-import {SentryService} from "../shared/sentry_service";
-import {ErrorService} from "../shared/error_service";
-import {Connection} from "../models/connection/connection";
+import { Timer2TicketError } from "../models/timer2TicketError";
+import { SentryService } from "../shared/sentry_service";
+import { ErrorService } from "../shared/error_service";
+import { Connection } from "../models/connection/connection";
+import { WebhookEventData } from "../models/connection/config/webhook_event_data";
 
 export interface SyncedService {
 
@@ -16,8 +17,10 @@ export interface SyncedService {
   /**
    * Get all service objects which: projects, issues, activities etc.
    * returns false in case of
+   * @param syncCustomField: name of pairing field used for 2 project tools sync, mandatory only for project tools when syncing Ticket2Ticket
    */
-  getAllServiceObjects(): Promise<ServiceObject[] | boolean>;
+  getAllServiceObjects(syncCustomField?: string | number | null): Promise<ServiceObject[] | boolean>;
+
 
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one
@@ -80,4 +83,6 @@ export interface SyncedService {
   extractMappingsObjectsFromTimeEntry(timeEntry: TimeEntry, mappings: Mapping[]): MappingsObject[];
 
   getTimeEntriesRelatedToMappingObjectForConnection(mapping: Mapping, connection: Connection): Promise<TimeEntry[] | null>;
+
+  getObjectsFromWebhook(webhookObject: WebhookEventData, syncCustomField: string | number | null | undefined): Promise<[ServiceObject, TimeEntry | null] | null>;
 }
