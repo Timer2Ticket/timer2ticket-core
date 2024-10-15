@@ -63,10 +63,15 @@ export class TimeEntriesSyncJob extends SyncJob {
     // for each service definition, request time entries and then for each other service definition, sync them
     for (const serviceDefinition of this._user.serviceDefinitions) {
       const syncedService = SyncedServiceCreator.create(serviceDefinition);
+      const timeEntries = await syncedService.getTimeEntries(start, now);
+      if (!timeEntries) {
+        // TODO method to get timeentries and update joblog
+        return false;
+      }
       const serviceTimeEntriesWrapper = new ServiceTimeEntriesWrapper(
         serviceDefinition,
         syncedService,
-        await syncedService.getTimeEntries(start, now),
+        timeEntries,
       );
 
       serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
@@ -150,7 +155,8 @@ export class TimeEntriesSyncJob extends SyncJob {
     for (const timeEntrySyncedObjectWrapper of timeEntrySyncedObjectWrappers) {
       if (!this._isTimeEntrySyncedObjectArchived(timeEntrySyncedObjectWrapper)) {
         try {
-          if (await this._checkTimeEntrySyncedObject(timeEntrySyncedObjectWrapper, someDaysAgoFilter)) {
+          const checkResult = await this._checkTimeEntrySyncedObject(timeEntrySyncedObjectWrapper, someDaysAgoFilter);
+          if (checkResult) {
             // some changes probably were made to TESO object, update it in db
             const dbUpdateResult = await databaseService.updateTimeEntrySyncedObject(timeEntrySyncedObjectWrapper.timeEntrySyncedObject) !== null;
             operationsOk &&= dbUpdateResult;
@@ -160,6 +166,8 @@ export class TimeEntriesSyncJob extends SyncJob {
               Sentry.captureException("Failed to update database");
               // console.error('err: TESyncJob: b), c), d), e); DB update');
             }
+          } else if (checkResult === undefined) {
+            operationsOk = false;
           }
         } catch (ex) {
           operationsOk = false;
@@ -249,7 +257,7 @@ export class TimeEntriesSyncJob extends SyncJob {
   private async _checkTimeEntrySyncedObject(
     timeEntrySyncedObjectWrapper: TimeEntrySyncedObjectWrapper,
     someDaysAgoFilter: Date)
-    : Promise<boolean> {
+    : Promise<boolean | undefined> {
     // firstly, find origin service
     // if TE defined => loop through all other TEs and find the last updated one,
     //    if timeEntrySyncedObjectWrapper.lastUpdated is same as that one => scenario b2) otherwise b1)
@@ -358,7 +366,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           // create new TE for given service, then create new STEO and add to TESO
           // TE should be created based on lastUpdatedServiceTimeEntryObjectWrapper.timeEntry
           // console.log('TESyncJob: c)');
-
+          // TODO ??? not using the returned TE ???
           await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
             otherServicesMappingsObjects,
             serviceDefinition,
@@ -372,8 +380,12 @@ export class TimeEntriesSyncJob extends SyncJob {
     } else if (Utilities.compare(timeEntrySyncedObjectWrapper.timeEntrySyncedObject.date, someDaysAgoFilter) > 0) {
       // TE missing, but in someDaysAgoFilter
       // firstly try to find it in history (can be on the edge of the someDaysAgoFilter or could be moved by user)
-      const originTimeEntry = await originServiceTimeEntryObjectWrapper.syncedService.getTimeEntryById(originServiceTimeEntryObjectWrapper.serviceTimeEntryObject.id, start);
-
+      let originTimeEntry;
+      try {
+        originTimeEntry = await originServiceTimeEntryObjectWrapper.syncedService.getTimeEntryById(originServiceTimeEntryObjectWrapper.serviceTimeEntryObject.id, start);
+      } catch (ex) {
+        return undefined;
+      }
       // not found, delete
       if (!originTimeEntry) {
         // scenario d)

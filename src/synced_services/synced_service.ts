@@ -56,7 +56,7 @@ export interface SyncedService {
   /**
    * getTimeEntries
    */
-  getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[]>;
+  getTimeEntries(start?: Date, end?: Date): Promise<TimeEntry[] | false>;
 
   /**
    * Returns only one time entry based on given id
