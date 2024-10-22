@@ -335,7 +335,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
 
     response.body?.forEach((timeEntry: never) => {
-      if(timeEntry['workspace_id'] === this._serviceDefinition.config.workspace?.id) {
+      if(timeEntry['workspace_id'] === this._serviceDefinition.config.workspace?.id && timeEntry['duration'] >= 0) {
         entries.push(
             new TogglTimeEntry(
                 timeEntry['id'],
