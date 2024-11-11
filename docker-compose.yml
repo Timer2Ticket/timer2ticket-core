@@ -1,0 +1,7 @@
+services:
+  mongo:
+    image: mongo
+    environment:
+      MONGO_INITDB_DATABASE: timer2ticketDB
+    ports:
+      - "27017:27017"

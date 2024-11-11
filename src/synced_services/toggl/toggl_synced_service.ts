@@ -100,7 +100,7 @@ export class TogglTrackSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllServiceObjects(): Promise<ServiceObject[] | boolean> {
+  async getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean> {
     const projects = await this._getAllProjects();
     const tags = await this._getAllTags();
     if (typeof projects == "boolean" || typeof tags === "boolean") {

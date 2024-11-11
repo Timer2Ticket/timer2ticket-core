@@ -143,9 +143,9 @@ app.post('/api/schedule_time_entries_job/:userId([a-zA-Z0-9]{24})', async (req: 
 // Schedule jobs for given user
 app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
   const userId = req.params.userId;
-  // config probably changed 
-  // => stop all scheduled cron tasks 
-  // => get updated user from DB 
+  // config probably changed
+  // => stop all scheduled cron tasks
+  // => get updated user from DB
   // => start jobs again
 
   const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
@@ -183,7 +183,7 @@ app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respon
 // Stop all jobs for given user
 app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
   const userId = req.params.userId;
-  // config probably changed 
+  // config probably changed
   // => stop all scheduled cron tasks
 
   const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
