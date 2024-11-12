@@ -20,11 +20,13 @@ export interface SyncedService {
   readonly supportsBackwardTagAssignmentAsSource: boolean
   readonly supportsBackwardTagAssignmentAsTarget: boolean
 
+  // TODO should return optional object wrapping ServiceObject[]
   /**
    * Get all service objects which: projects, issues, activities etc.
-   * returns false in case of
+   * returns false in case of error
+   * @param lastSyncAt Date (timestamp) from which to fetch service objects.
    */
-  getAllServiceObjects(): Promise<ServiceObject[] | boolean>;
+  getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean>;
 
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one

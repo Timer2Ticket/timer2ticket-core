@@ -5,6 +5,7 @@
   "main": "dist/app.js",
   "scripts": {
     "start": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon ./dist/app.js\"",
+    "start:debug": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon --inspect=9229 ./dist/app.js\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --build"
   },

@@ -33,8 +33,9 @@ export class ConfigSyncJob extends SyncJob {
 
     const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
+    const configLastSyncAt = this._user.configSyncJobDefinition.lastSuccessfullyDone;
     // Gets all objects from primary to sync with the other ones
-    const objectsToSync = await primarySyncedService.getAllServiceObjects();
+    const objectsToSync = await primarySyncedService.getAllServiceObjects(configLastSyncAt);
     //if we get boolean, a problem occurred while getting data from service (most likely 401 or 403 error)
     //we dont have all the service objects and stop the job
     if (typeof objectsToSync === "boolean") {
@@ -50,7 +51,7 @@ export class ConfigSyncJob extends SyncJob {
 
     for (const secondaryServiceDefinition of secondaryServiceDefinitions) {
       const syncedService = SyncedServiceCreator.create(secondaryServiceDefinition);
-      const allServiceObjects = await syncedService.getAllServiceObjects();
+      const allServiceObjects = await syncedService.getAllServiceObjects(configLastSyncAt);
       //same as above, there was a problem communication problem with service. We stop the job.
       if (typeof allServiceObjects === "boolean") {
         let message: string = 'Problem occurred while getting secondary service objects';
