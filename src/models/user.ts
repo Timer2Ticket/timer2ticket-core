@@ -13,6 +13,7 @@ export class User {
   config!: UserConfig;
   configSyncJobDefinition!: JobDefinition;
   timeEntrySyncJobDefinition!: JobDefinition;
+  removeObsoleteMappingsJobDefinition!: JobDefinition;
   serviceDefinitions: ServiceDefinition[] = [];
   mappings: Mapping[] = [];
 }

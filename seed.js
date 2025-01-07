@@ -18,6 +18,10 @@ db.users.insertOne({
         schedule: "10 * * * *",
         lastSuccessfullyDone: null,
     },
+    removeMappingJobDefinition: {
+        schedule: "30 */24 * * *",
+        lastSuccessfullyDone: null,
+    },
     serviceDefinitions: [
         {
             name: 'Redmine',

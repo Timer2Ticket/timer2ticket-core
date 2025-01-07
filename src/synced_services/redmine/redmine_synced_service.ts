@@ -14,7 +14,7 @@ import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
-import {ProjectStatus} from "../../models/synced_service/redmine/project_status";
+import {IssueStatus} from "../../models/synced_service/redmine/issue_status";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -24,7 +24,6 @@ export class RedmineSyncedService implements SyncedService {
   private _timeEntryActivitiesUri: string;
   private _timeEntriesUri: string;
   private _timeEntryUri: string;
-
   private _projectsType: string;
   private _issuesType: string;
   private _timeEntryActivitiesType: string;
@@ -117,6 +116,16 @@ export class RedmineSyncedService implements SyncedService {
     }
 
     return response;
+  }
+
+  async getAllRemovableObjectsWithinDate(startAt: number | null, endAt: number | null): Promise<ServiceObject[] | boolean> {
+    try {
+      const startAtDate = startAt ? new Date(startAt).toISOString().split('.')[0] + "Z" : null;
+      const endAtDate = endAt ? new Date(endAt).toISOString().split('.')[0] + "Z" : null;
+      return this._getAllIssues(startAtDate, endAtDate, [IssueStatus.CLOSED, IssueStatus.POSTPONED, IssueStatus.REJECTED]);
+    } catch (err: any) {
+      return false;
+    }
   }
 
   async getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean> {
@@ -214,52 +223,55 @@ export class RedmineSyncedService implements SyncedService {
   /**
    * Return Issues and Activities both in array of service objects
    */
-  private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[] | boolean> {
+  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatuses: IssueStatus[] = [IssueStatus.ACTIVE]): Promise<ServiceObject[]> {
     let totalCount = 0;
+    const issues: ServiceObject[] = [];
 
     const queryParams = {
       limit: this._responseLimit,
       offset: 0,
-      // get issues only from active projects
-      'project.status': ProjectStatus.ACTIVE,
-      updated_on: undefined as string | undefined,
+      'project.status': issueStatuses.join(','),
+      updated_on: startDate && endDate
+        ? `>=${startDate}&<=${endDate}`
+        : startDate
+          ? `>=${startDate}`
+          : endDate
+            ? `<=${endDate}`
+            : undefined,
     };
-
-    if (lastSyncAtDate !== null)
-      queryParams.updated_on = `>=${lastSyncAtDate}`;
-
-    const issues: ServiceObject[] = [];
-
-    // issues (paginate)
     do {
       let responseIssues;
       try {
         responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._issuesUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          superagent
+            .get(this._issuesUri)
+            .query(queryParams)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
         );
       } catch (ex: any) {
-        this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
-        return false;
+        this.handleResponseException(ex, 'getAllIssues');
+        throw ex;
       }
 
       responseIssues.body?.issues.forEach((issue: never) => {
         issues.push(
-            new ServiceObject(
-                issue['id'],
-                issue['subject'],
-                this._issuesType,
-            ));
+          new ServiceObject(
+            issue['id'],
+            issue['subject'],
+            this._issuesType,
+          ));
       });
 
       queryParams.offset += queryParams.limit;
       totalCount = responseIssues.body?.total_count;
     } while (queryParams.offset < totalCount);
 
+    return issues;
+  }
+
+  private async _getTimeEntryActivities(): Promise<ServiceObject[]> {
     const timeEntryActivities: ServiceObject[] = [];
 
     let responseTimeEntryActivities;
@@ -273,10 +285,9 @@ export class RedmineSyncedService implements SyncedService {
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
       );
     } catch (ex: any) {
-      this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
-      return false;
+      this.handleResponseException(ex, 'getTimeEntryActivities');
+      throw ex;
     }
-
 
     responseTimeEntryActivities.body?.time_entry_activities.forEach((timeEntryActivity: never) => {
       timeEntryActivities.push(
@@ -287,8 +298,17 @@ export class RedmineSyncedService implements SyncedService {
         ));
     });
 
-    // return concatenation of two arrays
-    return issues.concat(timeEntryActivities);
+    return timeEntryActivities;
+  }
+
+  private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[] | boolean> {
+    try {
+      const issues = await this._getAllIssues(lastSyncAtDate);
+      const timeEntryActivities = await this._getTimeEntryActivities();
+      return issues.concat(timeEntryActivities);
+    } catch (err: any) {
+      return false;
+    }
   }
 
   // ***********************************************************
@@ -739,9 +759,6 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   handleResponseException(ex: any, functionInfo: string): void {
-
-
-
     if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
       const error = this._errorService.createRedmineError(ex);
       const context =  [
@@ -763,6 +780,38 @@ export class RedmineSyncedService implements SyncedService {
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
+  }
 
+  async getServiceObjects(ids: (string | number)[]): Promise<ServiceObject[]> {
+    if (ids.length > this._responseLimit) {
+        throw 'Redmine does not support more than 50 ids in one request.';
+    }
+    const issues: ServiceObject[] = [];
+    const queryParams = {
+      limit: this._responseLimit,
+      issue_id: ids.join(','),
+    };
+    try {
+      const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+          .get(this._issuesUri)
+          .query(queryParams)
+          .accept('application/json')
+          .type('application/json')
+          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+      );
+      responseIssues.body?.issues.forEach((issue: never) => {
+        issues.push(
+          new ServiceObject(
+            issue['id'],
+            issue['subject'],
+            this._issuesType,
+          ));
+      });
+      return issues;
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getServiceObjects');
+      throw ex;
+    }
   }
 }

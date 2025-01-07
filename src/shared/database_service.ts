@@ -116,6 +116,21 @@ export class DatabaseService {
     return this._updateUserPartly(user, { $set: { "timeEntrySyncJobDefinition.lastSuccessfullyDone": user.timeEntrySyncJobDefinition.lastSuccessfullyDone } });
   }
 
+  async updateUserRemoveMappingsJobLastSuccessfullyDone(user: User): Promise<boolean> {
+    return this._updateUserPartly(user, { $set: { "removeMappingsJobDefinition.lastSuccessfullyDone": user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone } });
+  }
+
+  async createUserRemoveObsoleteMappingsJobDefaultDefinition(user: User): Promise<boolean> {
+    return this._updateUserPartly(user, {
+      $set: {
+        "removeObsoleteMappingsJobDefinition": {
+          "schedule": user.removeObsoleteMappingsJobDefinition.schedule,
+          "lastSuccessfullyDone": user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone,
+        }
+      }
+    });
+  }
+
   // ***********************************************************
   // TIME ENTRY SYNCED OBJECTS *********************************
   // ***********************************************************

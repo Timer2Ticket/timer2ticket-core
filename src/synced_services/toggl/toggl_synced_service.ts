@@ -13,6 +13,7 @@ import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 import {Utilities} from "../../shared/utilities";
+import {Set} from "typescript-collections";
 
 export class TogglTrackSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -660,5 +661,13 @@ export class TogglTrackSyncedService implements SyncedService {
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
 
+  }
+
+  getAllRemovableObjectsWithinDate(startAt: number | null, endAt: number | null): Promise<ServiceObject[] | boolean> {
+    throw new Error("Toggle is secondary service - This functions should not be implemented.");
+  }
+
+  getServiceObjects(ids: (string | number)[]): Promise<ServiceObject[]> {
+    throw new Error("Toggle is secondary service - This functions should not be implemented.");
   }
 }
