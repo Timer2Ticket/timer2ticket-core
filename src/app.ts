@@ -192,7 +192,7 @@ app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respons
   const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
   const removeObsoleteMappingsTask = activeUsersScheduledRemoveObsoleteMappingsSyncTasks.get(userId);
 
-  if (!configTask && !timeEntriesTask) {
+  if (!configTask && !timeEntriesTask && !removeObsoleteMappingsTask) {
     return res.status(404).send('No jobs found for this user.');
   }
 

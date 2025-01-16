@@ -42,7 +42,7 @@ export interface SyncedService {
    * @param startAt Date (timestamp) from which to fetch service objects.
    * @param endAt Date (timestamp) to which to fetch service objects.
    */
-  getAllRemovableObjectsWithinDate(startAt: number | null, endAt: number | null): Promise<ServiceObject[] | boolean>;
+  getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean>;
 
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one
@@ -55,7 +55,7 @@ export interface SyncedService {
   createServiceObject(objectId: string | number, objectName: string, objectType: string): Promise<ServiceObject>;
 
   /**
-   * Upda te service object like project, issue, tag and activity in the service, and return updated one
+   * Update service object like project, issue, tag and activity in the service, and return updated one
    * Used generally to update the object's name
    * Typically with name '[objectName] ([objectType])'
    * @param objectId id of object to update

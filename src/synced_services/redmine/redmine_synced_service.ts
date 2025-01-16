@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ServiceDefinition } from "../../models/service_definition/service_definition";
-import { TimeEntry } from "../../models/synced_service/time_entry/time_entry";
-import { SyncedService } from "../synced_service";
-import superagent, { SuperAgentRequest } from "superagent";
-import { ServiceObject } from "../../models/synced_service/service_object/service_object";
-import { RedmineTimeEntry } from "../../models/synced_service/time_entry/redmine_time_entry";
-import { Utilities } from "../../shared/utilities";
-import { MappingsObject } from "../../models/mapping/mappings_object";
-import { Mapping } from "../../models/mapping/mapping";
-import { Constants } from "../../shared/constants";
+import {ServiceDefinition} from "../../models/service_definition/service_definition";
+import {TimeEntry} from "../../models/synced_service/time_entry/time_entry";
+import {SyncedService} from "../synced_service";
+import superagent, {SuperAgentRequest} from "superagent";
+import {ServiceObject} from "../../models/synced_service/service_object/service_object";
+import {RedmineTimeEntry} from "../../models/synced_service/time_entry/redmine_time_entry";
+import {Utilities} from "../../shared/utilities";
+import {MappingsObject} from "../../models/mapping/mappings_object";
+import {Mapping} from "../../models/mapping/mapping";
+import {Constants} from "../../shared/constants";
 import {User} from "../../models/user";
 import {Timer2TicketError} from "../../models/timer2TicketError";
 import {SentryService} from "../../shared/sentry_service";
@@ -118,11 +118,16 @@ export class RedmineSyncedService implements SyncedService {
     return response;
   }
 
-  async getAllRemovableObjectsWithinDate(startAt: number | null, endAt: number | null): Promise<ServiceObject[] | boolean> {
+  async getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean> {
     try {
-      const startAtDate = startAt ? new Date(startAt).toISOString().split('.')[0] + "Z" : null;
-      const endAtDate = endAt ? new Date(endAt).toISOString().split('.')[0] + "Z" : null;
-      return this._getAllIssues(startAtDate, endAtDate, [IssueStatus.CLOSED, IssueStatus.POSTPONED, IssueStatus.REJECTED]);
+      const startAtDate = startAt ? startAt.toISOString().split('.')[0] + "Z" : null;
+      const endAtDate = endAt ? endAt.toISOString().split('.')[0] + "Z" : null;
+      const removableIssues: ServiceObject[] = [];
+      for (const status of [IssueStatus.CLOSED, IssueStatus.POSTPONED, IssueStatus.REJECTED]) {
+        const issues = await this._getAllIssues(startAtDate, endAtDate, status);
+        removableIssues.push(...issues);
+      }
+      return removableIssues;
     } catch (err: any) {
       return false;
     }
@@ -223,16 +228,16 @@ export class RedmineSyncedService implements SyncedService {
   /**
    * Return Issues and Activities both in array of service objects
    */
-  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatuses: IssueStatus[] = [IssueStatus.ACTIVE]): Promise<ServiceObject[]> {
+  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatus: IssueStatus = IssueStatus.ALL): Promise<ServiceObject[]> {
     let totalCount = 0;
     const issues: ServiceObject[] = [];
 
     const queryParams = {
       limit: this._responseLimit,
       offset: 0,
-      'project.status': issueStatuses.join(','),
+      'status_id': issueStatus,
       updated_on: startDate && endDate
-        ? `>=${startDate}&<=${endDate}`
+        ? `><${startDate}|${endDate}`
         : startDate
           ? `>=${startDate}`
           : endDate

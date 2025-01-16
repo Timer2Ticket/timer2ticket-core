@@ -7,6 +7,7 @@ import {SyncedServiceCreator} from "../synced_services/synced_service_creator";
 import {SyncJob} from "./sync_job";
 import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
 import {SyncedServiceWrapper} from "../models/synced_service/synced_service_wrapper";
+import {SyncedService} from "../synced_services/synced_service";
 
 export class RemoveObsoleteMappingsJob extends SyncJob {
     /**
@@ -25,14 +26,14 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
 
         const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
-        const configLastRemovalAt = this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone ?? Date.now(); // milliseconds
-        const lastRemovalDate = new Date(configLastRemovalAt);
+        const lastRemovalAt = this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone ?? Date.now(); // milliseconds
+        const lastRemovalDate = new Date(lastRemovalAt);
         const shiftedLastRemovalDate = new Date(lastRemovalDate.setDate(lastRemovalDate.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
         // Gets all objects from primary to sync with the other ones
         // case 1 - remove closed issues
         const now = new Date();
         const markedToDeleteThresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
-        const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(shiftedLastRemovalDate.getDate(), markedToDeleteThresholdDate.getDate());
+        const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(shiftedLastRemovalDate, markedToDeleteThresholdDate);
         const obsoleteMappings: Mapping[] = [];
 
         if (typeof removableObjects !== "boolean") {
@@ -64,18 +65,15 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
     /**
      * Deletes mapping from all services except the primary one
      * @param mapping
+     * @param syncedServiceMap
      * @private
      */
-    private async _deleteMapping(mapping: Mapping): Promise<boolean> {
+    private async _deleteMapping(mapping: Mapping, syncedServiceMap: Map<string, SyncedService>): Promise<boolean> {
         let operationsOk = true;
 
         for (const mappingObject of mapping.mappingsObjects) {
-            const serviceDefinition = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.name === mappingObject.service);
-
-            // if serviceDefinition not found or isPrimary => means do not delete project from primary service since it is not there
-            if (!serviceDefinition || serviceDefinition.isPrimary) continue;
-
-            const syncedService = SyncedServiceCreator.create(serviceDefinition);
+            const syncedService = syncedServiceMap.get(mappingObject.service);
+            if (!syncedService) continue;
             let operationOk = true;
             try {
                 operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type);
@@ -113,9 +111,10 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
     private async _deleteObsoleteMappings(obsoleteMappings: Mapping[], primaryServiceDefinition: ServiceDefinition): Promise<boolean> {
         let operationsOk = true;
         const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
+        const syncedServiceMap = this._createSyncedServiceMap();
         for (const mapping of obsoleteMappings) {
             if (mapping.primaryObjectType !== 'issue') {
-                const result = await this._deleteMapping(mapping);
+                const result = await this._deleteMapping(mapping, syncedServiceMap);
                 operationsOk &&= result;
                 continue;
             }
@@ -193,5 +192,15 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                         === undefined);
         }
         return operationsOk;
+    }
+
+    private _createSyncedServiceMap() {
+        const syncedServiceMap = new Map<string, SyncedService>();
+        for (const serviceDefinition of this._user.serviceDefinitions) {
+            if (serviceDefinition.isPrimary) continue;
+            const syncedService = SyncedServiceCreator.create(serviceDefinition);
+            syncedServiceMap.set(serviceDefinition.name, syncedService);
+        }
+        return syncedServiceMap;
     }
 }
