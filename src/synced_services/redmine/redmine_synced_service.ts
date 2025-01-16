@@ -122,12 +122,7 @@ export class RedmineSyncedService implements SyncedService {
     try {
       const startAtDate = startAt ? startAt.toISOString().split('.')[0] + "Z" : null;
       const endAtDate = endAt ? endAt.toISOString().split('.')[0] + "Z" : null;
-      const removableIssues: ServiceObject[] = [];
-      for (const status of [IssueStatus.CLOSED, IssueStatus.POSTPONED, IssueStatus.REJECTED]) {
-        const issues = await this._getAllIssues(startAtDate, endAtDate, status);
-        removableIssues.push(...issues);
-      }
-      return removableIssues;
+        return await this._getAllIssues(startAtDate, endAtDate, IssueStatus.CLOSED);
     } catch (err: any) {
       return false;
     }
