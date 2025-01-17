@@ -346,8 +346,79 @@ export class RedmineSyncedService implements SyncedService {
   }
 
   private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[]> {
-    const issues = await this._getAllIssues(lastSyncAtDate);
-    const timeEntryActivities = await this._getTimeEntryActivities();
+    let totalCount = 0;
+
+    const queryParams = {
+      limit: this._responseLimit,
+      offset: 0,
+      // get issues only from active projects
+      'project.status': ProjectStatus.ACTIVE,
+      updated_on: undefined as string | undefined,
+    };
+
+    if (lastSyncAtDate !== null)
+      queryParams.updated_on = `>=${lastSyncAtDate}`;
+
+    const issues: ServiceObject[] = [];
+
+    // issues (paginate)
+    do {
+      let responseIssues;
+      try {
+        responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._issuesUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        );
+      } catch (ex: any) {
+        this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
+        throw ex;
+      }
+
+      responseIssues.body?.issues.forEach((issue: never) => {
+        issues.push(
+            new ServiceObject(
+                issue['id'],
+                issue['subject'],
+                this._issuesType,
+            ));
+      });
+
+      queryParams.offset += queryParams.limit;
+      totalCount = responseIssues.body?.total_count;
+    } while (queryParams.offset < totalCount);
+
+    const timeEntryActivities: ServiceObject[] = [];
+
+    let responseTimeEntryActivities;
+    try {
+      // time entry activities (do not paginate)
+      responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._timeEntryActivitiesUri)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+      );
+    } catch (ex: any) {
+      this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
+      throw ex;
+    }
+
+
+    responseTimeEntryActivities.body?.time_entry_activities.forEach((timeEntryActivity: never) => {
+      timeEntryActivities.push(
+          new ServiceObject(
+              timeEntryActivity['id'],
+              timeEntryActivity['name'],
+              this._timeEntryActivitiesType,
+          ));
+    });
+
+    // return concatenation of two arrays
     return issues.concat(timeEntryActivities);
   }
 
