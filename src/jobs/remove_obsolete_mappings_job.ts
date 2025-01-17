@@ -60,6 +60,10 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone = removeUntilDate.getTime();
             await databaseService.updateUserRemoveObsoleteMappingsJobLastSuccessfullyDone(this._user);
         }
+        // persist changes in the mappings
+        // even if some api operations were not ok, persist changes to the mappings - better than nothing
+        await databaseService.updateUserMappings(this._user);
+        await databaseService.updateJobLog(this._jobLog);
         return operationsOk;
     }
 
