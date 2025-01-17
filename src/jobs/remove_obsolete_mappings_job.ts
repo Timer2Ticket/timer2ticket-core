@@ -19,33 +19,32 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
     protected async _doTheJob(): Promise<boolean> {
         const primaryServiceDefinition: ServiceDefinition | undefined
             = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.isPrimary);
-
+        const userMappings = this._user.mappings ?? [];
         if (!primaryServiceDefinition) {
             throw 'Primary service definition not found.';
         }
 
         const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
-        let shiftedLastRemovalDate = null
-        if (this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone) {
-            const lastRemovalDate = new Date(this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone);
-            shiftedLastRemovalDate = new Date(lastRemovalDate.setDate(lastRemovalDate.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
-        }
+
+        const lastRemovalDate = this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone
+            ? new Date(this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone)
+            : null;
         // Gets all objects from primary to sync with the other ones
         // case 1 - remove closed issues
         const now = new Date();
-        const markedToDeleteThresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
-        const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(shiftedLastRemovalDate, markedToDeleteThresholdDate);
+        const removeUntilDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+        const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(lastRemovalDate, removeUntilDate);
         const obsoleteMappings: Mapping[] = [];
 
         if (typeof removableObjects !== "boolean") {
             for (const objectToRemove of removableObjects) {
-                obsoleteMappings.push(...this._user.mappings.filter(mapping => mapping.primaryObjectType == 'issues' && mapping.primaryObjectId == objectToRemove.id));
+                obsoleteMappings.push(...userMappings.filter(mapping => mapping.primaryObjectId == objectToRemove.id));
             }
         }
 
         // case 2 - remove mappings with non-existing service object in primary service
-        const mappingChunks = this._chunkArray(this._user.mappings.filter(mapping => mapping.primaryObjectType == 'issues'), 50);
+        const mappingChunks = this._chunkArray(userMappings.filter(mapping => mapping.primaryObjectType == 'issues'), 50);
         for (const chunk of mappingChunks) {
             const issues = await primarySyncedService.getServiceObjects(chunk.map(mapping => mapping.primaryObjectId));
             if (issues.length !== chunk.length) {
@@ -58,8 +57,8 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
 
         const operationsOk = await this._deleteObsoleteMappings(obsoleteMappings, primaryServiceDefinition);
         if (operationsOk) {
-            this._user.timeEntrySyncJobDefinition.lastSuccessfullyDone = new Date().getTime();
-            databaseService.updateUserRemoveMappingsJobLastSuccessfullyDone(this._user);
+            this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone = removeUntilDate.getTime();
+            await databaseService.updateUserRemoveObsoleteMappingsJobLastSuccessfullyDone(this._user);
         }
         return operationsOk;
     }
@@ -191,7 +190,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                 .mappings
                 .filter(
                     mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping)
-                        === undefined);
+                        === undefined) ?? [];
         }
         return operationsOk;
     }

@@ -116,8 +116,8 @@ export class DatabaseService {
     return this._updateUserPartly(user, { $set: { "timeEntrySyncJobDefinition.lastSuccessfullyDone": user.timeEntrySyncJobDefinition.lastSuccessfullyDone } });
   }
 
-  async updateUserRemoveMappingsJobLastSuccessfullyDone(user: User): Promise<boolean> {
-    return this._updateUserPartly(user, { $set: { "removeMappingsJobDefinition.lastSuccessfullyDone": user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone } });
+  async updateUserRemoveObsoleteMappingsJobLastSuccessfullyDone(user: User): Promise<boolean> {
+    return this._updateUserPartly(user, { $set: { "removeObsoleteMappingsJobDefinition.lastSuccessfullyDone": user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone } });
   }
 
   async createUserRemoveObsoleteMappingsJobDefaultDefinition(user: User): Promise<boolean> {
