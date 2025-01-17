@@ -26,9 +26,11 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
 
         const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
-        const lastRemovalAt = this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone ?? Date.now(); // milliseconds
-        const lastRemovalDate = new Date(lastRemovalAt);
-        const shiftedLastRemovalDate = new Date(lastRemovalDate.setDate(lastRemovalDate.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+        let shiftedLastRemovalDate = null
+        if (this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone) {
+            const lastRemovalDate = new Date(this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone);
+            shiftedLastRemovalDate = new Date(lastRemovalDate.setDate(lastRemovalDate.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+        }
         // Gets all objects from primary to sync with the other ones
         // case 1 - remove closed issues
         const now = new Date();

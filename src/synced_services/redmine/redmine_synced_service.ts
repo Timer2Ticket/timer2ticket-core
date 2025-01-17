@@ -15,6 +15,7 @@ import {SentryService} from "../../shared/sentry_service";
 import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 import {IssueStatus} from "../../models/synced_service/redmine/issue_status";
+import {ProjectStatus} from "../../models/synced_service/redmine/project_status";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -122,7 +123,9 @@ export class RedmineSyncedService implements SyncedService {
     try {
       const startAtDate = startAt ? startAt.toISOString().split('.')[0] + "Z" : null;
       const endAtDate = endAt ? endAt.toISOString().split('.')[0] + "Z" : null;
-        return await this._getAllIssues(startAtDate, endAtDate, IssueStatus.CLOSED);
+      const projects = await this._getAllClosedProjects(startAtDate, endAtDate);
+      const issues = await this._getAllClosedIssues(startAtDate, endAtDate);
+      return projects.concat(issues);
     } catch (err: any) {
       return false;
     }
@@ -131,12 +134,13 @@ export class RedmineSyncedService implements SyncedService {
   async getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean> {
     // Convert timestamp to ISO date, Redmine does not support milliseconds in Date
     const lastSyncAtDate = lastSyncAt === null ? null : new Date(lastSyncAt).toISOString().split('.')[0] + "Z";
-    const projects = await this._getAllProjects(lastSyncAtDate);
-    const additionalServiceObjects = await this._getAllAdditionalServiceObjects(lastSyncAtDate);
-    if (typeof projects === "boolean" || typeof additionalServiceObjects === "boolean") {
+    try {
+      const projects = await this._getAllProjects(lastSyncAtDate);
+      const additionalServiceObjects = await this._getAllAdditionalServiceObjects(lastSyncAtDate);
+      return projects.concat(additionalServiceObjects);
+    } catch (err: any){
       return false;
     }
-    return projects.concat(additionalServiceObjects);
   }
 
   async createServiceObject(): Promise<ServiceObject> {
@@ -169,9 +173,23 @@ export class RedmineSyncedService implements SyncedService {
   // PROJECTS **************************************************
   // ***********************************************************
 
-  private async _getAllProjects(lastSyncAtDate: string | null): Promise<ServiceObject[] | boolean> {
-    let totalCount = 0;
+  private async _getAllClosedProjects(startDate: string | null, endDate: string | null = null): Promise<ServiceObject[]> {
+    const queryParams = {
+      limit: this._responseLimit,
+      offset: 0,
+      status: ProjectStatus.CLOSED,
+      updated_on: startDate && endDate
+          ? `><${startDate}|${endDate}`
+          : startDate
+              ? `>=${startDate}`
+              : endDate
+                  ? `<=${endDate}`
+                  : undefined,
+    };
+    return this.fetchProjects(queryParams);
+  }
 
+  private async _getAllProjects(lastSyncAtDate: string | null): Promise<ServiceObject[]> {
     const queryParams = {
       limit: this._responseLimit,
       offset: 0,
@@ -181,6 +199,50 @@ export class RedmineSyncedService implements SyncedService {
     if (lastSyncAtDate !== null)
       queryParams.updated_on = `>=${lastSyncAtDate}`;
 
+    return this.fetchProjects(queryParams);
+  }
+
+  // ***********************************************************
+  // OTHER SERVICE OBJECTS *************************************
+  // ***********************************************************
+
+  private async _getAllClosedIssues(startDate: string | null, endDate: string | null = null): Promise<ServiceObject[]> {
+    const queryParams = {
+      limit: this._responseLimit,
+      offset: 0,
+      'status_id': IssueStatus.CLOSED,
+      closed_on: startDate && endDate
+          ? `><${startDate}|${endDate}`
+          : startDate
+              ? `>=${startDate}`
+              : endDate
+                  ? `<=${endDate}`
+                  : undefined,
+    };
+    return await this.fetchIssues(queryParams);
+  }
+
+  /**
+   * Return Issues and Activities both in array of service objects
+   */
+  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatus: IssueStatus = IssueStatus.ALL): Promise<ServiceObject[]> {
+    const queryParams = {
+      limit: this._responseLimit,
+      offset: 0,
+      'status_id': issueStatus,
+      updated_on: startDate && endDate
+        ? `><${startDate}|${endDate}`
+        : startDate
+          ? `>=${startDate}`
+          : endDate
+            ? `<=${endDate}`
+            : undefined,
+    };
+    return await this.fetchIssues(queryParams);
+  }
+
+  private async fetchProjects(queryParams: { limit: number; offset: number; [key: string]: any }): Promise<ServiceObject[]> {
+    let totalCount = 0;
     const projects: ServiceObject[] = [];
 
     do {
@@ -196,17 +258,17 @@ export class RedmineSyncedService implements SyncedService {
         );
       } catch (ex: any) {
         this.handleResponseException(ex, 'getAllProjects');
-        return false;
+        throw ex;
       }
 
 
       response.body?.projects.forEach((project: never) => {
         projects.push(
-          new ServiceObject(
-            project['id'],
-            project['name'],
-            this._projectsType,
-          ));
+            new ServiceObject(
+                project['id'],
+                project['name'],
+                this._projectsType,
+            ));
       });
 
       queryParams.offset += queryParams.limit;
@@ -216,52 +278,33 @@ export class RedmineSyncedService implements SyncedService {
     return projects;
   }
 
-  // ***********************************************************
-  // OTHER SERVICE OBJECTS *************************************
-  // ***********************************************************
-
-  /**
-   * Return Issues and Activities both in array of service objects
-   */
-  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatus: IssueStatus = IssueStatus.ALL): Promise<ServiceObject[]> {
+  private async fetchIssues(queryParams: { limit: number; offset: number; [key: string]: any }): Promise<ServiceObject[]> {
     let totalCount = 0;
     const issues: ServiceObject[] = [];
 
-    const queryParams = {
-      limit: this._responseLimit,
-      offset: 0,
-      'status_id': issueStatus,
-      updated_on: startDate && endDate
-        ? `><${startDate}|${endDate}`
-        : startDate
-          ? `>=${startDate}`
-          : endDate
-            ? `<=${endDate}`
-            : undefined,
-    };
     do {
       let responseIssues;
       try {
         responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-            .get(this._issuesUri)
-            .query(queryParams)
-            .accept('application/json')
-            .type('application/json')
-            .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+            superagent
+                .get(this._issuesUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
         );
       } catch (ex: any) {
-        this.handleResponseException(ex, 'getAllIssues');
+        this.handleResponseException(ex, 'fetchIssues');
         throw ex;
       }
 
       responseIssues.body?.issues.forEach((issue: never) => {
         issues.push(
-          new ServiceObject(
-            issue['id'],
-            issue['subject'],
-            this._issuesType,
-          ));
+            new ServiceObject(
+                issue['id'],
+                issue['subject'],
+                this._issuesType,
+            ));
       });
 
       queryParams.offset += queryParams.limit;
@@ -270,6 +313,7 @@ export class RedmineSyncedService implements SyncedService {
 
     return issues;
   }
+
 
   private async _getTimeEntryActivities(): Promise<ServiceObject[]> {
     const timeEntryActivities: ServiceObject[] = [];
@@ -301,14 +345,10 @@ export class RedmineSyncedService implements SyncedService {
     return timeEntryActivities;
   }
 
-  private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[] | boolean> {
-    try {
-      const issues = await this._getAllIssues(lastSyncAtDate);
-      const timeEntryActivities = await this._getTimeEntryActivities();
-      return issues.concat(timeEntryActivities);
-    } catch (err: any) {
-      return false;
-    }
+  private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[]> {
+    const issues = await this._getAllIssues(lastSyncAtDate);
+    const timeEntryActivities = await this._getTimeEntryActivities();
+    return issues.concat(timeEntryActivities);
   }
 
   // ***********************************************************
