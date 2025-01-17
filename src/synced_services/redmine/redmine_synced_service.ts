@@ -225,7 +225,7 @@ export class RedmineSyncedService implements SyncedService {
   /**
    * Return Issues and Activities both in array of service objects
    */
-  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatus: IssueStatus = IssueStatus.ALL): Promise<ServiceObject[]> {
+  private async _getAllIssues(startDate: string | null, endDate: string | null = null, issueStatus: IssueStatus = IssueStatus.ACTIVE): Promise<ServiceObject[]> {
     const queryParams = {
       limit: this._responseLimit,
       offset: 0,
