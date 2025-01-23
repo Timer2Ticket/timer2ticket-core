@@ -332,37 +332,6 @@ export class RedmineSyncedService implements SyncedService {
     return issues;
   }
 
-
-  private async _getTimeEntryActivities(): Promise<ServiceObject[]> {
-    const timeEntryActivities: ServiceObject[] = [];
-
-    let responseTimeEntryActivities;
-    try {
-      // time entry activities (do not paginate)
-      responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._timeEntryActivitiesUri)
-              .accept('application/json')
-              .type('application/json')
-              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
-    } catch (ex: any) {
-      this.handleResponseException(ex, 'getTimeEntryActivities');
-      throw ex;
-    }
-
-    responseTimeEntryActivities.body?.time_entry_activities.forEach((timeEntryActivity: never) => {
-      timeEntryActivities.push(
-        new ServiceObject(
-          timeEntryActivity['id'],
-          timeEntryActivity['name'],
-          this._timeEntryActivitiesType,
-        ));
-    });
-
-    return timeEntryActivities;
-  }
-
   private async _getAllAdditionalServiceObjects(lastSyncAtDate: string | null): Promise<ServiceObject[]> {
     let totalCount = 0;
 
