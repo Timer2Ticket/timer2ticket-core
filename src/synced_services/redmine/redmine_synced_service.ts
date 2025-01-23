@@ -120,7 +120,7 @@ export class RedmineSyncedService implements SyncedService {
   }
 
 
-  private getISOStringWithCETTimeZone(date: Date): string {
+  private _getISOStringWithCETTimeZone(date: Date): string {
     const localeString = date.toLocaleString('en-US', {
       timeZone: 'CET',
       year: 'numeric',
@@ -139,8 +139,8 @@ export class RedmineSyncedService implements SyncedService {
 
   async getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean> {
     try {
-      const startAtDate = startAt ? this.getISOStringWithCETTimeZone(startAt) : null;
-      const endAtDate = endAt ? this.getISOStringWithCETTimeZone(endAt) : null;
+      const startAtDate = startAt ? this._getISOStringWithCETTimeZone(startAt) : null;
+      const endAtDate = endAt ? this._getISOStringWithCETTimeZone(endAt) : null;
       const projects = await this._getAllClosedProjects(startAtDate, endAtDate);
       const issues = await this._getAllClosedIssues(startAtDate, endAtDate);
       return projects.concat(issues);
