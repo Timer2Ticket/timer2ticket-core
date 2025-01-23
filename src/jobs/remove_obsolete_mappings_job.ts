@@ -33,18 +33,22 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
         // Gets all objects from primary to sync with the other ones
         // case 1 - remove closed issues
         const now = new Date();
+        lastRemovalDate?.setHours(0,0,0,0);
         const removeUntilDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
+        removeUntilDate.setHours(23, 59, 59, 999);
         const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(lastRemovalDate, removeUntilDate);
         const obsoleteMappings: Mapping[] = [];
 
         if (typeof removableObjects !== "boolean") {
             for (const objectToRemove of removableObjects) {
-                obsoleteMappings.push(...userMappings.filter(mapping => mapping.primaryObjectId == objectToRemove.id));
+                obsoleteMappings.push(...userMappings.filter(
+                    mapping => mapping.primaryObjectId == objectToRemove.id &&
+                        (mapping.primaryObjectType == 'issue' || mapping.primaryObjectType == 'project' )));
             }
         }
 
         // case 2 - remove mappings with non-existing service object in primary service
-        const mappingChunks = this._chunkArray(userMappings.filter(mapping => mapping.primaryObjectType == 'issues'), 50);
+        const mappingChunks = this._chunkArray(userMappings.filter(mapping => mapping.primaryObjectType == 'issue'), 50);
         for (const chunk of mappingChunks) {
             const issues = await primarySyncedService.getServiceObjects(chunk.map(mapping => mapping.primaryObjectId));
             if (issues.length !== chunk.length) {
