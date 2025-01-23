@@ -119,10 +119,28 @@ export class RedmineSyncedService implements SyncedService {
     return response;
   }
 
+
+  private getISOStringWithCETTimeZone(date: Date): string {
+    const localeString = date.toLocaleString('en-US', {
+      timeZone: 'CET',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const month = localeString.split('/')[0];
+    const day = localeString.split('/')[1];
+    const year = localeString.split('/')[2].split(',')[0];
+    let time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).split(' ')[0];
+    if (time == '24:00:00') {
+        time = '00:00:00';
+    }
+    return `${year}-${month}-${day}T${time}Z`;
+  }
+
   async getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean> {
     try {
-      const startAtDate = startAt ? startAt.toISOString().split('.')[0] + "Z" : null;
-      const endAtDate = endAt ? endAt.toISOString().split('.')[0] + "Z" : null;
+      const startAtDate = startAt ? this.getISOStringWithCETTimeZone(startAt) : null;
+      const endAtDate = endAt ? this.getISOStringWithCETTimeZone(endAt) : null;
       const projects = await this._getAllClosedProjects(startAtDate, endAtDate);
       const issues = await this._getAllClosedIssues(startAtDate, endAtDate);
       return projects.concat(issues);

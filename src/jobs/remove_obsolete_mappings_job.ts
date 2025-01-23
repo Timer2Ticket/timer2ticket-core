@@ -26,7 +26,6 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
 
         const primarySyncedService = SyncedServiceCreator.create(primaryServiceDefinition);
 
-
         const lastRemovalDate = this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone
             ? new Date(this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone)
             : null;
