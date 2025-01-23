@@ -59,11 +59,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             }
         }
 
-        // remove duplicates
-        obsoleteMappings = obsoleteMappings.filter(
-            (item, index, self) => self.findIndex(i => i.primaryObjectId === item.primaryObjectId) === index
-        );
-
+        obsoleteMappings = Array.from(new Set(obsoleteMappings));
 
         const operationsOk = await this._deleteObsoleteMappings(obsoleteMappings, primaryServiceDefinition);
         if (operationsOk) {
