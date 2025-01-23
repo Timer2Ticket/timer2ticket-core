@@ -901,6 +901,7 @@ export class RedmineSyncedService implements SyncedService {
     const queryParams = {
       limit: this._responseLimit,
       issue_id: ids.join(','),
+      status_id: '*'
     };
     try {
       const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
