@@ -64,6 +64,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             (item, index, self) => self.findIndex(i => i.primaryObjectId === item.primaryObjectId) === index
         );
 
+
         const operationsOk = await this._deleteObsoleteMappings(obsoleteMappings, primaryServiceDefinition);
         if (operationsOk) {
             this._user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone = removeUntilDate.getTime();
@@ -169,6 +170,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                     }
                 }
             }
+
+            operationsOk &&= await this._deleteMapping(mapping, syncedServiceMap);
+
             //TODO figure out how to pass TogglTrack in better
             const secondaryServiceDefinition
                 = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.name === "TogglTrack");
