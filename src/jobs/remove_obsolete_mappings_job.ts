@@ -37,7 +37,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
         const removeUntilDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
         removeUntilDate.setHours(23, 59, 59, 999);
         const removableObjects = await primarySyncedService.getAllRemovableObjectsWithinDate(lastRemovalDate, removeUntilDate);
-        const obsoleteMappings: Mapping[] = [];
+        let obsoleteMappings: Mapping[] = [];
 
         if (typeof removableObjects !== "boolean") {
             for (const objectToRemove of removableObjects) {
@@ -58,6 +58,11 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                 obsoleteMappings.push(...notFoundMappings);
             }
         }
+
+        // remove duplicates
+        obsoleteMappings = obsoleteMappings.filter(
+            (item, index, self) => self.findIndex(i => i.primaryObjectId === item.primaryObjectId) === index
+        );
 
         const operationsOk = await this._deleteObsoleteMappings(obsoleteMappings, primaryServiceDefinition);
         if (operationsOk) {
