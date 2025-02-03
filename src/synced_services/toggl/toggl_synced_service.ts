@@ -661,4 +661,12 @@ export class TogglTrackSyncedService implements SyncedService {
     }
 
   }
+
+  getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean> {
+    throw new Error("Toggle is secondary service - This functions should not be implemented.");
+  }
+
+  getServiceObjects(ids: (string | number)[]): Promise<ServiceObject[]> {
+    throw new Error("Toggle is secondary service - This functions should not be implemented.");
+  }
 }

@@ -28,6 +28,22 @@ export interface SyncedService {
    */
   getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean>;
 
+
+  /**
+   * Get service objects specified by ids which: projects, issues, activities etc.
+   * returns false in case of error
+   * @param ids Ids of service objects to fetch
+   */
+  getServiceObjects(ids: (string | number)[]): Promise<ServiceObject[]>;
+
+  /**
+   * Get all removable objects within selected date: closed, postponed or rejected issues
+   * returns false in case of error
+   * @param startAt Date (timestamp) from which to fetch service objects.
+   * @param endAt Date (timestamp) to which to fetch service objects.
+   */
+  getAllRemovableObjectsWithinDate(startAt: Date | null, endAt: Date | null): Promise<ServiceObject[] | boolean>;
+
   /**
    * Create service object like project, issue, tag and activity in the service, and return newly created one
    *

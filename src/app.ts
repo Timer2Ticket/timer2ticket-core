@@ -8,6 +8,7 @@ import { TimeEntriesSyncJob } from './jobs/time_entries_sync_job';
 import { Constants } from './shared/constants';
 import { databaseService } from './shared/database_service';
 import { User } from './models/user';
+import {RemoveObsoleteMappingsJob} from "./jobs/remove_obsolete_mappings_job";
 
 Sentry.init({
   dsn: Constants.sentryDsn,
@@ -18,13 +19,14 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// queue for ConfigSyncJobs (CSJs) or TimeEntriesSyncJobs (TESJs)
+// queue for ConfigSyncJobs (CSJs), TimeEntriesSyncJobs (TESJs) or RemoveMappingsJob (RMJs)
 const jobQueue = new Queue<SyncJob>();
 
 // maps containing tasks to stop them if needed
 // currently using when request comes from the client app (see below)
 const activeUsersScheduledConfigSyncTasks = new Map<string, cron.ScheduledTask>();
 const activeUsersScheduledTimeEntriesSyncTasks = new Map<string, cron.ScheduledTask>();
+const activeUsersScheduledRemoveObsoleteMappingsSyncTasks = new Map<string, cron.ScheduledTask>();
 
 // cleanUpJob - removes old projects, issues etc. - not needed for now.
 
@@ -174,7 +176,7 @@ app.post('/api/start/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respon
     return res.sendStatus(503);
   }
   jobQueue.enqueue(new ConfigSyncJob(user, jobLog));
-  // and schedule next CSJs and TESJs by the user's normal schedule
+  // and schedule next CSJs, TESJs and RMJs by the user's normal schedule
   scheduleJobs(user);
 
   return res.send('User\'s jobs started successfully.');
@@ -188,8 +190,9 @@ app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respons
 
   const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
   const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
+  const removeObsoleteMappingsTask = activeUsersScheduledRemoveObsoleteMappingsSyncTasks.get(userId);
 
-  if (!configTask && !timeEntriesTask) {
+  if (!configTask && !timeEntriesTask && !removeObsoleteMappingsTask) {
     return res.status(404).send('No jobs found for this user.');
   }
 
@@ -203,18 +206,23 @@ app.post('/api/stop/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Respons
     timeEntriesTask.stop();
     activeUsersScheduledTimeEntriesSyncTasks.delete(userId);
   }
+  if (removeObsoleteMappingsTask) {
+    removeObsoleteMappingsTask.stop();
+    activeUsersScheduledRemoveObsoleteMappingsSyncTasks.delete(userId);
+  }
 
   return res.send('User\'s jobs stopped successfully.');
 });
 
-// Returns 204 if both config and TE jobs are scheduled for given user
+// Returns 204 if config, TE and RM jobs are scheduled for given user
 app.post('/api/scheduled/:userId([a-zA-Z0-9]{24})', async (req: Request, res: Response) => {
   const userId = req.params.userId;
 
   const configTask = activeUsersScheduledConfigSyncTasks.get(userId);
   const timeEntriesTask = activeUsersScheduledTimeEntriesSyncTasks.get(userId);
+  const removeObsoleteMappingsTask = activeUsersScheduledRemoveObsoleteMappingsSyncTasks.get(userId);
 
-  if (configTask && timeEntriesTask) {
+  if (configTask && timeEntriesTask && removeObsoleteMappingsTask) {
     return res.send({ scheduled: true });
   }
 
@@ -255,5 +263,20 @@ function scheduleJobs(user: User) {
       }
     });
     activeUsersScheduledTimeEntriesSyncTasks.set(user._id.toString(), task);
+  }
+
+  if (cron.validate(user.removeObsoleteMappingsJobDefinition.schedule)) {
+    const task = cron.schedule(user.removeObsoleteMappingsJobDefinition.schedule, async () => {
+      // grab fresh user from the db to see his lastSuccessfullyDone
+      const actualUser = await databaseService.getUserById(user._id.toString());
+      if (actualUser) {
+        const jobLog = await databaseService.createJobLog(user._id, 'remove-obsolete-mappings', 't2t-auto');
+        if (jobLog) {
+          // console.log(' -> Added RemoveMappingsJob');
+          jobQueue.enqueue(new RemoveObsoleteMappingsJob(actualUser, jobLog));
+        }
+      }
+    });
+    activeUsersScheduledRemoveObsoleteMappingsSyncTasks.set(user._id.toString(), task);
   }
 }

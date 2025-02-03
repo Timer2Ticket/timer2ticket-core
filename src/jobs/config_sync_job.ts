@@ -3,13 +3,10 @@ import { Mapping } from "../models/mapping/mapping";
 import { MappingsObject } from "../models/mapping/mappings_object";
 import { ServiceDefinition } from "../models/service_definition/service_definition";
 import { ServiceObject } from "../models/synced_service/service_object/service_object";
-import { Constants } from "../shared/constants";
 import { databaseService } from "../shared/database_service";
-import { Utilities } from "../shared/utilities";
-import { SyncedService } from "../synced_services/synced_service";
 import { SyncedServiceCreator } from "../synced_services/synced_service_creator";
 import { SyncJob } from "./sync_job";
-import {TimeEntrySyncedObject} from "../models/synced_service/time_entry_synced_object/time_entry_synced_object";
+import {SyncedServiceWrapper} from "../models/synced_service/synced_service_wrapper";
 
 export class ConfigSyncJob extends SyncJob {
   /**
@@ -75,23 +72,18 @@ export class ConfigSyncJob extends SyncJob {
     //    => create mapping, propagate objects to other services
     // b) Mapping is there, but is incorrect (for example project name changed)
     //    => update mapping, propagate changes to other services
-    // c) Mapping is there, but object is not there (in primary service)
-    //    => delete objects from other services and delete mapping
-    // d) Mapping is there and is the same as primary object
+    // c) Mapping is there and is the same as primary object
     //    => do nothing
-    // e) Mapping is there, but mappingObject for given service is missing
+    // d) Mapping is there, but mappingObject for given service is missing
     //    => create objects in service and add mappingObject to the mapping
-    // f) Mapping is there, mappingObject for given service too, but real object is missing
+    // e) Mapping is there, mappingObject for given service too, but real object is missing
     //    => create object in service
 
     // Also, if new service was added, this job should do the right job as it is
 
-    // array of checked mappings (new ones or existing ones), used for finding obsolete mappings
-    const checkedMappings: Mapping[] = [];
-
     let operationsOk = true;
 
-    // Check all objectsToSync and their corresponding mapping
+    // Check all objectsToSync and their corresponding mapping (syncing of objects)
     for (const objectToSync of objectsToSync) {
       // find by its id and type (finding type in mapping.mappingsObjects is for legacy support)
       let mapping = this._user.mappings.find(
@@ -105,14 +97,10 @@ export class ConfigSyncJob extends SyncJob {
           // scenario a)
           mapping = await this._createMapping(objectToSync, secondaryServicesWrappersMap);
         } else {
-          // scenario b), d), e), f)
+          // scenario b), c), d), e)
           const result = await this._checkMapping(objectToSync, mapping, secondaryServicesWrappersMap);
           operationsOk &&= result;
         }
-
-        // push to checkedMappings
-        // can be undefined from scenario a)
-        checkedMappings.push(mapping);
       } catch (ex) {
         operationsOk = false;
         //TODO figure out better way to work with extra context.
@@ -123,114 +111,7 @@ export class ConfigSyncJob extends SyncJob {
       }
     }
 
-    // obsolete mappings = user's mappings that were not checked => there is no primary object linked to it
-    const obsoleteMappings: Mapping[] = [];
-    const now = new Date();
-    const markedToDeleteTresholdDate = new Date(now.setDate(now.getDate() - Constants.configObjectMappingMarkedToDeleteTresholdInDays));
-
-    // do not delete now, set markedToDelete to now and delete after some days to allow users to set time to completed tasks which are not fetched from primary etc.
-    for (const mapping of this._user.mappings) {
-      const isObsolete = checkedMappings.find(checkedMapping => checkedMapping === mapping) === undefined;
-      if (isObsolete && mapping.markedToDelete) {
-        // check if days passed from when it was markedToDelete
-        if (Utilities.compare(mapping.markedToDelete, markedToDeleteTresholdDate) < 0) {
-          // if yes => delete mapping and all objects from other services (add to array for delete below)
-          obsoleteMappings.push(mapping);
-        }
-        // else do nothing, wait for markedToDelete to reach the treshold
-      } else if (isObsolete && mapping.markedToDelete === undefined) {
-        // set markedToDelete to now only
-        mapping.markedToDelete = new Date();
-      } else if (!isObsolete && mapping.markedToDelete) {
-        mapping.markedToDelete = undefined;
-      }
-    }
-
     // console.log('[OMR] -> som za markToDelete, pocet obsolete='.concat(String(obsoleteMappings.length)));
-
-    if (obsoleteMappings.length > 0) {
-      const timeEntriesToArchive: Array<TimeEntrySyncedObject> = [];
-      for (const mapping of obsoleteMappings) {
-        if (mapping.primaryObjectType !== 'issue') {
-          // let message = 'OBSOLETE MAPPING SKIP -> typ: '.concat(<string>mapping.primaryObjectType, ' value: ', mapping.name, ' is marked to delete!');
-          // add user error
-          // console.log(message);
-          // // Sentry.captureMessage(message);
-          const result = await this._deleteMapping(mapping);
-          operationsOk = operationsOk && result;
-          continue;
-        }
-        //there is no explicit link between TESO and Mappings in the T2T DB
-        //we deal with this problem by saving mappings primaryObjectId and its service.
-        // With POId and service name, we get all the TimeEntries from API
-        // Then we find the related TimeEntrySyncedObjects and set them as archived.
-        const primaryObjectId = mapping.primaryObjectId;
-        const primaryMappingObjects = mapping.mappingsObjects.filter($object => $object.id === primaryObjectId) //possible 2 mapping objects with same ID can exist, low probability, i dont deal with it here
-        if (primaryMappingObjects.length !== 1) {
-          operationsOk = false;
-          let message: string = 'primaryMappingObject does not exist or 2 timeEntries with same ID exist';
-          this._jobLog.errors.push(this._errorService.createConfigJobError(message));
-        } else {
-          const primaryMappingObject = primaryMappingObjects[0];
-          const primaryObjectServiceName = primaryMappingObject.service;
-          if (primaryObjectServiceName !== 'Redmine') {
-            operationsOk = false;
-            let message: string = 'Archive TESOs functionality is not yet supported for services other than Redmine!';
-            this._jobLog.errors.push(this._errorService.createConfigJobError(message));
-          } else {
-            const service = SyncedServiceCreator.create(primaryServiceDefinition)
-            const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);
-            if (!relatedTimeEntriesFromApi) {
-              operationsOk = false;
-            } else {
-              for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
-                const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, primaryObjectServiceName, this._user._id);
-                if (foundTESO == null) {
-                  // console.log('Null returned from DB findOne!');
-                  operationsOk = false;
-                } else {
-                  // console.log('DB findOne returned TESO with Id='.concat(foundTESO._id.toString()));
-                  foundTESO.issueName = mapping.mappingsObjects.find(element => element.service === "TogglTrack")?.name;
-                  timeEntriesToArchive.push(foundTESO);
-                }
-              }
-            }
-          }
-        }
-
-        // scenario c)
-        operationsOk &&= await this._deleteMapping(mapping);
-      }
-      //TODO figure out how to pass TogglTrack in better
-      const togglService = secondaryServicesWrappersMap.get("TogglTrack");
-      // console.log('[OMR] Archiving '.concat(timeEntriesToArchive.length.toString(), ' TESOs for user ', this._user.username,'.'));
-      for (const timeEntryToArchive of timeEntriesToArchive) {
-
-        if (togglService !== undefined) {
-          const toggleTimeEntry = timeEntryToArchive.serviceTimeEntryObjects.find(
-              (element) => element.service === "TogglTrack");
-          if (toggleTimeEntry !== undefined && timeEntryToArchive.issueName !== undefined) {
-            try {
-              await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
-            }
-              catch (exception) {
-                operationsOk = false;
-              }
-          }
-
-        }
-        const updateResponse = await databaseService.makeTimeEntrySyncedObjectArchived(timeEntryToArchive);
-        operationsOk &&= updateResponse !== null;
-      }
-
-      // and remove all obsolete mappings from user's mappings
-      this._user.mappings
-        = this._user
-          .mappings
-          .filter(
-            mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping)
-              === undefined);
-    }
 
     if (operationsOk) {
       // if all operations OK => set lastSuccessfullyDone (important to set not null for starting TE syncing)
@@ -249,8 +130,8 @@ export class ConfigSyncJob extends SyncJob {
 
   /**
    * Creates mapping based on objectToSync
-   * @param user
    * @param objectToSync object from primary service
+   * @param secondaryServicesWrappersMap
    */
   private async _createMapping(objectToSync: ServiceObject, secondaryServicesWrappersMap: Map<string, SyncedServiceWrapper>): Promise<Mapping> {
     // is wrapped in try catch block above
@@ -304,7 +185,7 @@ export class ConfigSyncJob extends SyncJob {
       const mappingsObject = mapping.mappingsObjects.find(mappingObject => mappingObject.service === serviceDefinition.name);
 
       if (!mappingsObject) {
-        // scenario e)
+        // scenario d)
         // mappingObject is missing, create a new one and add to mapping (maybe new service was added)
         // create a real object in the service and add mappingObject
         // firstly create object in the service, then create serviceObject with newly acquired id
@@ -312,13 +193,13 @@ export class ConfigSyncJob extends SyncJob {
         const newMappingsObject = new MappingsObject(newObject.id, newObject.name, serviceDefinition.name, newObject.type);
         mapping.mappingsObjects.push(newMappingsObject);
       } else {
-        // scenario b), d), f)
+        // scenario b), c), e)
         // check if mapping corresponds with real object in the service
         const objectBasedOnMapping = await serviceWrapper.allServiceObjects
           .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
 
         if (!objectBasedOnMapping) {
-          // scenario f), create new object in the service
+          // scenario e), create new object in the service
           const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
           mappingsObject.id = newObject.id;
           mappingsObject.name = newObject.name;
@@ -351,7 +232,7 @@ export class ConfigSyncJob extends SyncJob {
           mappingsObject.name = updatedObject.name;
           mappingsObject.lastUpdated = Date.now();
         } else {
-          // scenario d)
+          // scenario c)
           // everything OK, do nothing
         }
       }
@@ -382,49 +263,5 @@ export class ConfigSyncJob extends SyncJob {
       // console.log(`ConfigSyncJob: Creating mapping, but object exists, using real object ${newObject.name}`);
     }
     return newObject;
-  }
-
-  private async _deleteMapping(mapping: Mapping): Promise<boolean> {
-    let operationsOk = true;
-
-    for (const mappingObject of mapping.mappingsObjects) {
-      const serviceDefinition = this._user.serviceDefinitions.find(serviceDefinition => serviceDefinition.name === mappingObject.service);
-
-      // if serviceDefinition not found or isPrimary => means do not delete project from primary service since it is not there
-      if (!serviceDefinition || serviceDefinition.isPrimary) continue;
-
-      const syncedService = SyncedServiceCreator.create(serviceDefinition);
-      let operationOk = true;
-      try {
-        operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type);
-      } catch (ex: any) {
-        if (ex.status === 404) {
-          // service object is missing, it is ok to delete the mapping
-          operationOk = true;
-        } else {
-          let context = [
-            this._sentryService.createExtraContext('Mapping to delete', {'id': mappingObject.id, 'type': mappingObject.type})
-          ]
-          this._sentryService.logError(ex);
-          // console.error('err: ConfigSyncJob: delete; exception');
-        }
-      }
-      operationsOk &&= operationOk;
-    }
-
-    // if any of those operations did fail, return false
-    return operationsOk;
-  }
-}
-
-class SyncedServiceWrapper {
-  serviceDefinition!: ServiceDefinition;
-  syncedService!: SyncedService;
-  allServiceObjects!: ServiceObject[];
-
-  constructor(serviceDefinition: ServiceDefinition, syncedService: SyncedService, serviceObjects: ServiceObject[]) {
-    this.serviceDefinition = serviceDefinition;
-    this.syncedService = syncedService;
-    this.allServiceObjects = serviceObjects;
   }
 }
