@@ -120,7 +120,7 @@ export class DatabaseService {
     return this._updateUserPartly(user, { $set: { "removeObsoleteMappingsJobDefinition.lastSuccessfullyDone": user.removeObsoleteMappingsJobDefinition.lastSuccessfullyDone } });
   }
 
-  async createUserRemoveObsoleteMappingsJobDefaultDefinition(user: User): Promise<boolean> {
+  async updateUserRemoveObsoleteMappingsJobDefaultDefinition(user: User): Promise<boolean> {
     return this._updateUserPartly(user, {
       $set: {
         "removeObsoleteMappingsJobDefinition": {

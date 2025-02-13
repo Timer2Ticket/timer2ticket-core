@@ -8,7 +8,8 @@
     "start:debug": "tsc-watch --project . --outDir ./dist --onSuccess \"nodemon --inspect=9229 ./dist/app.js\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --build",
-    "create-remove-obsolete-mappings-schedules": "ts-node src/create_remove_obsolete_mappings_schedules.ts"
+    "create-remove-obsolete-mappings-schedules": "ts-node src/create_remove_obsolete_mappings_schedules.ts",
+    "disable-remove-obsolete-mappings-schedules": "ts-node src/disable_remove_obsolete_mappings_schedules.ts"
   },
   "author": "",
   "license": "ISC",
