@@ -18,7 +18,7 @@ async function createRemoveObsoleteMappingsSchedule(user: User) {
         "schedule": `${randomMinute}${defaultSchedule.substring(1)}`,
         "lastSuccessfullyDone": null
     }; // midnight + random minute, so the RM is not overloaded
-    await databaseService.createUserRemoveObsoleteMappingsJobDefaultDefinition(user);
+    await databaseService.updateUserRemoveObsoleteMappingsJobDefaultDefinition(user);
 }
 
 function randomNumberBetween(min: number, max: number): number {

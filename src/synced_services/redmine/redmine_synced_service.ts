@@ -142,7 +142,9 @@ export class RedmineSyncedService implements SyncedService {
       const startAtDate = startAt ? this._getISOStringWithCETTimeZone(startAt) : null;
       const endAtDate = endAt ? this._getISOStringWithCETTimeZone(endAt) : null;
       const projects = await this._getAllClosedProjects(startAtDate, endAtDate);
+      console.log("Projekty na smazání (pouze closed): " + projects)
       const issues = await this._getAllClosedIssues(startAtDate, endAtDate);
+      console.log("Issues na smazání: " + issues)
       return projects.concat(issues);
     } catch (err: any) {
       return false;
