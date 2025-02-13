@@ -58,6 +58,8 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             }
         }
 
+        console.log('Obsolete mappings: ', obsoleteMappings);
+
         // remove duplicates
         obsoleteMappings = Array.from(new Set(obsoleteMappings));
 
