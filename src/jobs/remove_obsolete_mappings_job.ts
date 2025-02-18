@@ -42,6 +42,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             for (const objectToRemove of removableObjects) {
                 obsoleteMappings.push(...userMappings.filter(
                     mapping => mapping.primaryObjectId == objectToRemove.id &&
+                        mapping.primaryObjectType == objectToRemove.type &&
                         (mapping.primaryObjectType == 'issue' || mapping.primaryObjectType == 'project' )));
             }
         }
