@@ -5,3 +5,35 @@ services:
       MONGO_INITDB_DATABASE: timer2ticketDB
     ports:
       - "27017:27017"
+
+  redmine:
+    image: redmine
+    restart: always
+    ports:
+      - 9095:3000
+    environment:
+      REDMINE_DB_POSTGRES: redmine_db
+      REDMINE_DB_PASSWORD: example
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_SECRET_KEY_BASE: supersecretkey
+    volumes:
+      - ./redmine/plugins:/usr/src/redmine/plugins
+      - ./redmine/themes:/usr/src/redmine/public/themes
+    networks:
+      - internal
+
+  redmine_db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_USER: redmine
+      POSTGRES_DB: redmine
+    networks:
+      - internal
+    ports:
+      - "5434:5432"
+
+networks:
+  internal:
+    driver: bridge
