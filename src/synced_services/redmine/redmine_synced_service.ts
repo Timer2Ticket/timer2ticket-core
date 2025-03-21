@@ -108,9 +108,11 @@ export class RedmineSyncedService implements SyncedService {
       await this._wait();
     }
 
-    if (res.response && !res.response.ok) throw res;
-
-    return res.response;
+    // Make sure that wait is executed if 429
+    if (res.response && !res.response.ok) {
+      throw res;
+    }
+    return res;
   }
 
 
@@ -423,7 +425,7 @@ export class RedmineSyncedService implements SyncedService {
     const entries: RedmineTimeEntry[] = [];
 
     do {
-      let response = null;
+      let response;
       try {
         response = await this._retryAndWaitInCaseOfTooManyRequests(
             superagent
@@ -435,12 +437,8 @@ export class RedmineSyncedService implements SyncedService {
         );
       } catch (err: any) {
         this.handleResponseException(err, 'getTimeEntries');
-        throw err;
-      }
 
-      if (!response) {
-        // shouldnt happen
-        return [];
+        throw err;
       }
 
       response.body['time_entries'].forEach((timeEntry: never) => {
@@ -553,7 +551,6 @@ export class RedmineSyncedService implements SyncedService {
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
         this.handleResponseException(err, 'getTimeEntriesRelatedToMappingObjectForUser');
-        this._sentryService.logRedmineError(this._projectsUri, err)
         return null;
       }
 
@@ -644,12 +641,12 @@ export class RedmineSyncedService implements SyncedService {
     };
 
     if (issueId) {
-      timeEntryBody['issue_id'] = issueId;
+      timeEntryBody['issue_id'] = 5465465546465;
     } else if (projectId) {
-      timeEntryBody['project_id'] = projectId;
+      timeEntryBody['project_id'] = 45465465465465;
     }
 
-    let response = null;
+    let response;
 
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
@@ -662,7 +659,7 @@ export class RedmineSyncedService implements SyncedService {
       );
     } catch (err: any) {
       this.handleResponseException(err, 'createTimeEntry', timeEntryBody);
-      return null;
+      throw err;
     }
 
     if (!response || !response.ok) {
@@ -817,7 +814,7 @@ export class RedmineSyncedService implements SyncedService {
       return updated ?? timeEntry;
 
     } catch (error) {
-      this.handleResponseException(error, 'updateTimeEntry');
+      this.handleResponseException(error, 'updateTimeEntry', timeEntryBody);
       return timeEntry;
     }
   }
@@ -837,7 +834,7 @@ export class RedmineSyncedService implements SyncedService {
       if (err && (err.status === 403 || err.status === 404)) {
         return true;
       } else {
-        this.handleResponseException(err, 'deleteTimeEntry');
+        this.handleResponseException(err, 'deleteTimeEntry', {timeEntryId: id});
         return false;
       }
     }
@@ -871,34 +868,42 @@ export class RedmineSyncedService implements SyncedService {
     return mappingsObjectsResult;
   }
 
-  handleResponseException(ex: any, functionInfo: string, body?: unknown): void {
+  handleResponseException(ex: any, functionInfo: string, objectData?: any): void {
     let context: ExtraContext[] = [];
-
-    if (ex != undefined) {
+    if (ex !== undefined) {
       context = [
         this._sentryService.createExtraContext("Exception", ex),
         this._sentryService.createExtraContext("Response", ex.response),
       ];
-      if (body) {
-        context.push();
-        context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
+      if (objectData) {
+        context.push(this._sentryService.createExtraContext("Object_data", JSON.parse(JSON.stringify(objectData))));
       }
     }
-    if (ex !== undefined && (ex.response.status === 403 || ex.response.status === 401) ) {
-      const error = this._errorService.createRedmineError(ex.response.body.errors);
+
+    if (ex !== undefined && (ex.response.status === 403 || ex.response.status === 401)) {
+      const error = this._errorService.createRedmineError({
+        status: ex.response.statusCode,
+        errors: ex.response.body.errors
+      });
 
       //const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
       //this._sentryService.logRedmineError(this._projectsUri, message , context)
-      error.data ="API key error. Please check if your API key is correct";
+      error.specification += " - API key error";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
-      this.errors.push(error)
+      this.errors.push(error);
     } else {
-      //TODO validate if this should be sent to user FE
-      const message = `${functionInfo} failed with different reason than 403/401 response code!`
-      this._sentryService.logRedmineError(this._projectsUri, message, context)
+      const message = `${functionInfo} failed with a response code ${ex.response.statusCode}`;
+      this._sentryService.logRedmineError(this._projectsUri, message, context);
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      const error = this._errorService.createRedmineError({
+        status: ex.response.statusCode,
+        errors: ex.response.body.errors,
+        objectData: objectData
+      });
+      error.specification += " - " + message;
+      this.errors.push(error);
     }
   }
 

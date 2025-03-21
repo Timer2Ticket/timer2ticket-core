@@ -56,6 +56,7 @@ export class JobLog {
     }
 
     this.status = isSuccessful ? 'successful' : 'unsuccessful';
+    console.log(this.status, isSuccessful)
     this.completed = new Date().getTime();
     return await databaseService.updateJobLog(this);
   }

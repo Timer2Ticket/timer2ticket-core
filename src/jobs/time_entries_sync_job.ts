@@ -58,19 +58,26 @@ export class TimeEntriesSyncJob extends SyncJob {
     //    => create new TE for the service
 
     // object wrapper for service and its timeEntries
+    this._serviceTimeEntriesWrappers = [];
     const serviceTimeEntriesWrappersMap: Map<string, ServiceTimeEntriesWrapper> = new Map();
 
     // for each service definition, request time entries and then for each other service definition, sync them
     for (const serviceDefinition of this._user.serviceDefinitions) {
       const syncedService = SyncedServiceCreator.create(serviceDefinition);
-      const serviceTimeEntriesWrapper = new ServiceTimeEntriesWrapper(
-        serviceDefinition,
-        syncedService,
-        await syncedService.getTimeEntries(start, now),
-      );
+      try {
+        const serviceTimeEntriesWrapper = new ServiceTimeEntriesWrapper(
+            serviceDefinition,
+            syncedService,
+            await syncedService.getTimeEntries(start, now),
+        );
 
-      this._serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
-      serviceTimeEntriesWrappersMap.set(serviceDefinition.name, serviceTimeEntriesWrapper);
+        this._serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
+        serviceTimeEntriesWrappersMap.set(serviceDefinition.name, serviceTimeEntriesWrapper);
+      } catch (err: any) {
+
+        await this.updateJobLog(syncedService.errors);
+        return false;
+      }
     }
 
     const timeEntrySyncedObjectWrappers: TimeEntrySyncedObjectWrapper[] = [];
@@ -138,7 +145,7 @@ export class TimeEntriesSyncJob extends SyncJob {
             }
           } catch (ex) {
             operationsOk = false;
-            Sentry.captureException(ex);
+            // Sentry.captureException(ex);
             // console.error('err: TESyncJob: a); exception');
           }
           // if null, TE is not meant to be synced
@@ -163,7 +170,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           }
         } catch (ex) {
           operationsOk = false;
-          captureException(ex);
+          // captureException(ex);
           //console.error(ex);
           // console.error('err: TESyncJob: b), c), d), e); exception');
         }
@@ -179,7 +186,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       databaseService.updateUserTimeEntrySyncJobLastSuccessfullyDone(this._user);
     }
 
-    await this.updateJobLog(this._serviceTimeEntriesWrappers.map(wrapper => wrapper.syncedService?.errors || []).flat())
+    await this.updateJobLog(this._serviceTimeEntriesWrappers.map(wrapper => wrapper.syncedService?.errors ?? []).flat())
 
     return operationsOk;
   }
@@ -416,7 +423,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
   private async updateJobLog(errors: Timer2TicketError[])
   {
-    this._jobLog.errors.concat(errors)
+    this._jobLog.errors = this._jobLog.errors.concat(errors);
     const updated = await databaseService.updateJobLog(this._jobLog);
     if (updated instanceof JobLog) {
       this._jobLog = updated;

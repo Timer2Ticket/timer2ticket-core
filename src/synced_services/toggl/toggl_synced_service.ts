@@ -98,15 +98,14 @@ export class TogglTrackSyncedService implements SyncedService {
 
 
     if (needToWait) {
-      // wait, because Redmine is responding with 429
-      // (Seems like Redmine does not respond with 429, but handled just in case.)
+      // wait, because Toggl is responding with 429
       await this._wait();
     }
 
-    // Superagent throws if not caught after retry. Newly caught, but keep old behavior
+    // Make sure that wait is executed if 429
     if (res.response && !res.response.ok) throw res;
 
-    return res.response;
+    return res;
   }
 
   async getAllServiceObjects(lastSyncAt: number | null): Promise<ServiceObject[] | boolean> {
@@ -220,7 +219,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
       return new ServiceObject(response.body['id'], response.body['name'], this._projectsType);
     } catch (err: any) {
-      this.handleResponseException(err, 'createProject');
+      this.handleResponseException(err, 'createProject', {name: projectName, is_private: false, active: true});
       throw err;
     }
   }
@@ -236,7 +235,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
       return new ServiceObject(response.body['id'], response.body['name'], this._projectsType);
     } catch (err: any) {
-      this.handleResponseException(err, 'updateProject');
+      this.handleResponseException(err, 'updateProject', { name: this.getFullNameForServiceObject(project), active: true  });
       throw err;
     }
   }
@@ -251,7 +250,7 @@ export class TogglTrackSyncedService implements SyncedService {
 
       return response.ok;
     } catch (err: any) {
-      this.handleResponseException(err, 'deleteProject');
+      this.handleResponseException(err, 'deleteProject', {projectId: id});
       throw err;
     }
   }
@@ -310,7 +309,10 @@ export class TogglTrackSyncedService implements SyncedService {
 
       return new ServiceObject(response.body['id'], response.body['name'], this._tagsType);
     } catch (err: any) {
-      this.handleResponseException(err, 'createTag');
+      this.handleResponseException(err, 'createTag', {
+        name: this.getFullNameForServiceObject(new ServiceObject(objectId, objectName, objectType)),
+        workspace_id: this._serviceDefinition.config.workspace?.id
+      });
       throw err;
     }
   }
@@ -326,19 +328,25 @@ export class TogglTrackSyncedService implements SyncedService {
 
       return new ServiceObject(response.body['id'], response.body['name'], this._tagsType);
     } catch (err: any) {
-      this.handleResponseException(err, 'updateTag');
+      this.handleResponseException(err, 'updateTag', {name: this.getFullNameForServiceObject(serviceObject)});
       throw err;
     }
   }
 
   private async _deleteTag(id: string | number): Promise<boolean> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .delete(`${this._tagsUri}/${id}`)
-        .auth(this._serviceDefinition.apiKey, 'api_token')
-    );
+    try {
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .delete(`${this._tagsUri}/${id}`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+      );
 
-    return response.ok;
+      return response.ok;
+    } catch (err: any) {
+      this.handleResponseException(err, 'deleteTag', {tagId: id});
+      throw err;
+    }
+
   }
 
   // ***********************************************************
@@ -367,7 +375,7 @@ export class TogglTrackSyncedService implements SyncedService {
       );
     } catch (ex: any) {
       this.handleResponseException(ex, 'getTimeEntries')
-      return [];
+      throw ex;
     }
 
 
@@ -418,7 +426,7 @@ export class TogglTrackSyncedService implements SyncedService {
               .send(body)
       );
     } catch (err: any) {
-      this.handleResponseException(err, 'replaceTimeEntryDescription');
+      this.handleResponseException(err, 'replaceTimeEntryDescription', body);
       throw err;
     }
   }
@@ -517,7 +525,7 @@ export class TogglTrackSyncedService implements SyncedService {
       wid: this._serviceDefinition.config.workspace?.id,
     };
 
-    let response = null;
+    let response;
     try {
       response = await this._retryAndWaitInCaseOfTooManyRequests(
           superagent
@@ -526,7 +534,7 @@ export class TogglTrackSyncedService implements SyncedService {
               .send(timeEntryBody)
       );
     } catch (err: any) {
-      this.handleResponseException(err, 'createTimeEntry');
+      this.handleResponseException(err, 'createTimeEntry', timeEntryBody);
       throw err;
     }
 
@@ -630,19 +638,23 @@ export class TogglTrackSyncedService implements SyncedService {
           response.body
       );
     } catch (error) {
-      this.handleResponseException(error, 'updateTimeEntry');
+      this.handleResponseException(error, 'updateTimeEntry', originalTimeEntry.originalEntry);
       return originalEntry;
     }
   }
 
   async deleteTimeEntry(id: string | number): Promise<boolean> {
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .delete(`${this._workspacesTimeEntriesUri}/${id}`)
-        .auth(this._serviceDefinition.apiKey, 'api_token')
-    );
-
-    return response.ok;
+    try {
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .delete(`${this._workspacesTimeEntriesUri}/${id}`)
+              .auth(this._serviceDefinition.apiKey, 'api_token')
+      );
+      return response.ok;
+    } catch (err: any) {
+      this.handleResponseException(err, 'updateTimeEntry', {timeEntry: id});
+      throw err;
+    }
   }
 
   /**
@@ -682,34 +694,38 @@ export class TogglTrackSyncedService implements SyncedService {
     throw 'getTimeEntriesRelatedToMappingObject is not supported on Toggl service!'
   }
 
-  handleResponseException(ex: any, functionInfo: string): void {
+  handleResponseException(ex: any, functionInfo: string, objectData?: any): void {
     let context: ExtraContext[] = [];
 
     if (ex != undefined) {
       context = [
         this._sentryService.createExtraContext("Exception", ex),
-        this._sentryService.createExtraContext("Response", ex.response)
-        //this._sentryService.createExtraContext("Status_code", ex.status)
+        this._sentryService.createExtraContext("Response", ex.response),
       ]
+      if (objectData) {
+        context.push(this._sentryService.createExtraContext("Object_data", JSON.parse(JSON.stringify(objectData))));
+      }
     }
 
     if (ex != undefined && (ex.response.status === 403 || ex.response.status === 401) ) {
-      const error = this._errorService.createTogglError(ex.response.body.errors);
+      const error = this._errorService.createTogglError({
+        status: ex.response.statusCode,
+        errors: ex.response.body.errors
+      });
 
-      error.data ="API key error. Please check if you API key is correct";
-      //const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
-      //this._sentryService.logTogglError(message , context);
+      error.specification += " - API key error";
+
       this.errors.push(error);
-
-      // console.error('[TOGGL] '.concat(functionInfo, ' failed with status code=', ex.status));
-      // console.log('please, fix the apiKey of this user or set him as inactive');
     } else {
-      //TODO validate if this should be sent to user FE
-
-      // error.data = ''.concat(functionInfo, ' failed with status code=', ex.status, '\nplease, fix the apiKey of this user or set him as inactive');
-      const message = `${functionInfo} failed with different reason than 403/401 response code!'`
+      const message = `${functionInfo} failed with a response code ${ex.response.statusCode}`;
       this._sentryService.logTogglError(message, context);
-      // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+      const error = this._errorService.createTogglError({
+        status: ex.response.statusCode,
+        errors: ex.response.body.errors,
+        objectData: objectData
+      });
+      error.specification += " - " + message;
+      this.errors.push(error);
     }
 
   }

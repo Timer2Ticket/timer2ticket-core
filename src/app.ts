@@ -56,7 +56,7 @@ cron.schedule('*/10 * * * * *', () => {
           // console.log(' -> Repeating job');
           job.start().then(resRepeated => {
             if (resRepeated) {
-              // console.log(' -> Job repeated and now successfully done.');
+              //console.log(' -> Job repeated and now successfully done.');
               return;
             }
 
