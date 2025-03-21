@@ -23,6 +23,7 @@ export class TimeEntriesSyncJob extends SyncJob {
    */
 
   private needsConfigJob = false;
+  private _serviceTimeEntriesWrappers: ServiceTimeEntriesWrapper[] = [];
 
   protected async _doTheJob(): Promise<boolean> {
     let now = new Date();
@@ -57,7 +58,6 @@ export class TimeEntriesSyncJob extends SyncJob {
     //    => create new TE for the service
 
     // object wrapper for service and its timeEntries
-    const serviceTimeEntriesWrappers: ServiceTimeEntriesWrapper[] = [];
     const serviceTimeEntriesWrappersMap: Map<string, ServiceTimeEntriesWrapper> = new Map();
 
     // for each service definition, request time entries and then for each other service definition, sync them
@@ -69,7 +69,7 @@ export class TimeEntriesSyncJob extends SyncJob {
         await syncedService.getTimeEntries(start, now),
       );
 
-      serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
+      this._serviceTimeEntriesWrappers.push(serviceTimeEntriesWrapper);
       serviceTimeEntriesWrappersMap.set(serviceDefinition.name, serviceTimeEntriesWrapper);
     }
 
@@ -103,7 +103,7 @@ export class TimeEntriesSyncJob extends SyncJob {
 
     // find timeEntries that do not have its timeEntrySyncedObject => scenario a)
     // need to loop all timeEntries and try to find its TESO wrapper in timeEntrySyncedObjectWrappers
-    for (const serviceTimeEntriesWrapper of serviceTimeEntriesWrappers) {
+    for (const serviceTimeEntriesWrapper of this._serviceTimeEntriesWrappers) {
       for (const timeEntry of serviceTimeEntriesWrapper.timeEntries) {
         let timeEntrySyncedObjectFound = false;
         for (const timeEntrySyncedObjectWrapper of timeEntrySyncedObjectWrappers) {
@@ -121,7 +121,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           // TESO does not exist => scenario a)
 
           // prepare serviceTimeEntriesWrappers that are different from real TE's service wrapper
-          const otherServiceTimeEntriesWrappers = serviceTimeEntriesWrappers
+          const otherServiceTimeEntriesWrappers = this._serviceTimeEntriesWrappers
             .filter(stew => stew.serviceDefinition.name !== serviceTimeEntriesWrapper.serviceDefinition.name);
 
           try {
@@ -179,6 +179,8 @@ export class TimeEntriesSyncJob extends SyncJob {
       databaseService.updateUserTimeEntrySyncJobLastSuccessfullyDone(this._user);
     }
 
+    await this.updateJobLog(this._serviceTimeEntriesWrappers.map(wrapper => wrapper.syncedService?.errors || []).flat())
+
     return operationsOk;
   }
 
@@ -217,9 +219,9 @@ export class TimeEntriesSyncJob extends SyncJob {
         continue;
       }
 
-      const createdTimeEntry = await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
+      const createdTimeEntry = await this._createTimeEntryBasedOnTimeEntryModel(
         otherServicesMappingsObjects,
-        otherServiceDefinition.serviceDefinition,
+        otherServiceDefinition.syncedService,
         timeEntry,
         newTimeEntrySyncedObjectResult,
       );
@@ -308,7 +310,7 @@ export class TimeEntriesSyncJob extends SyncJob {
               timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.splice(index, 1);
 
               serviceTimeEntryObjectWrapper.timeEntry = await this._updateTimeEntry(
-                  serviceTimeEntryObjectWrapper.serviceDefinition,
+                  serviceTimeEntryObjectWrapper.syncedService,
                   lastUpdatedServiceTimeEntryObjectWrapper.timeEntry,
                   serviceTimeEntryObjectWrapper.timeEntry,
                   otherServicesMappingsObjects,
@@ -341,9 +343,9 @@ export class TimeEntriesSyncJob extends SyncJob {
           timeEntrySyncedObjectWrapper.timeEntrySyncedObject.serviceTimeEntryObjects.splice(index, 1);
 
           // this method creates new STEO with correct id
-          serviceTimeEntryObjectWrapper.timeEntry = await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
+          serviceTimeEntryObjectWrapper.timeEntry = await this._createTimeEntryBasedOnTimeEntryModel(
             otherServicesMappingsObjects,
-            serviceTimeEntryObjectWrapper.serviceDefinition,
+            serviceTimeEntryObjectWrapper.syncedService,
             lastUpdatedServiceTimeEntryObjectWrapper.timeEntry,
             timeEntrySyncedObjectWrapper.timeEntrySyncedObject,
             serviceTimeEntryObjectWrapper.serviceTimeEntryObject.isOrigin,
@@ -351,19 +353,18 @@ export class TimeEntriesSyncJob extends SyncJob {
         }
       }
 
-      for (const serviceDefinition of this._user.serviceDefinitions) {
-        const serviceTimeEntryObjectWrapper = timeEntrySyncedObjectWrapper.serviceTimeEntryObjectWrappers.find(steow => steow.serviceDefinition.name === serviceDefinition.name);
+      for (const serviceWrapper of this._serviceTimeEntriesWrappers) {
+        const serviceTimeEntryObjectWrapper = timeEntrySyncedObjectWrapper.serviceTimeEntryObjectWrappers.find(steow => steow.serviceDefinition.name === serviceWrapper.serviceDefinition.name);
         if (!serviceTimeEntryObjectWrapper) {
           // service is missing (probably new one was added recently) => scenario c)
           // create new TE for given service, then create new STEO and add to TESO
           // TE should be created based on lastUpdatedServiceTimeEntryObjectWrapper.timeEntry
           // console.log('TESyncJob: c)');
-
-          await this._createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
-            otherServicesMappingsObjects,
-            serviceDefinition,
-            lastUpdatedServiceTimeEntryObjectWrapper.timeEntry,
-            timeEntrySyncedObjectWrapper.timeEntrySyncedObject,
+          await this._createTimeEntryBasedOnTimeEntryModel(
+              otherServicesMappingsObjects,
+              serviceWrapper.syncedService,
+              lastUpdatedServiceTimeEntryObjectWrapper.timeEntry,
+              timeEntrySyncedObjectWrapper.timeEntrySyncedObject,
           );
         }
       }
@@ -384,6 +385,7 @@ export class TimeEntriesSyncJob extends SyncJob {
           if (serviceTimeEntryObjectWrapper !== originServiceTimeEntryObjectWrapper && serviceTimeEntryObjectWrapper.timeEntry) {
             allDeleted &&= await serviceTimeEntryObjectWrapper.syncedService.deleteTimeEntry(serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id);
             // TODO: Check this console message if needed
+            // TODO reuse synced service
             //console.log(`TESyncJob: deleted TE from the ${serviceTimeEntryObjectWrapper.serviceDefinition.name} with id = ${serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id}`);
           }
         }
@@ -428,18 +430,19 @@ export class TimeEntriesSyncJob extends SyncJob {
    * Returns newly created TE if ok, otherwise undefined
    *
    * @param otherServicesMappingsObjects
-   * @param serviceDefinition
+   * @param syncedService
    * @param timeEntryModel given TE model
    * @param timeEntrySyncedObject given TESO
    * @param shouldBeOrigin if new TE should be treated as origin (generally true if TE was updated in another non origin service and this serviceDefinition is true origin)
    */
-  private async _createTimeEntryBasedOnTimeEntryModelAndServiceDefinition(
+  private async _createTimeEntryBasedOnTimeEntryModel(
     otherServicesMappingsObjects: MappingsObject[],
-    serviceDefinition: ServiceDefinition,
+    syncedService: SyncedService,
     timeEntryModel: TimeEntry,
     timeEntrySyncedObject: TimeEntrySyncedObject,
     shouldBeOrigin = false)
     : Promise<TimeEntry | undefined> {
+    const serviceDefinition = syncedService.getServiceDefinition();
     const otherServiceMappingsObjects = otherServicesMappingsObjects.filter(mappingsObject => mappingsObject.service === serviceDefinition.name);
 
     const serviceObjectsMappings: ServiceObject[] = [];
@@ -451,8 +454,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       ));
     }
 
-    const service = SyncedServiceCreator.create(serviceDefinition, this._user);
-    const createdTimeEntry = await service.createTimeEntry(
+    const createdTimeEntry = await syncedService.createTimeEntry(
       timeEntryModel.durationInMilliseconds,
       new Date(timeEntryModel.start),
       new Date(timeEntryModel.end),
@@ -464,8 +466,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       createdTimeEntry,
       timeEntrySyncedObject,
       serviceDefinition.name,
-      shouldBeOrigin,
-      service.errors
+      shouldBeOrigin
     )
   }
 
@@ -473,8 +474,7 @@ export class TimeEntriesSyncJob extends SyncJob {
     createdTimeEntry: TimeEntry | null,
     timeEntrySyncedObject: TimeEntrySyncedObject,
     serviceDefinitionName: string,
-    shouldBeOrigin: boolean,
-    errors: Timer2TicketError[]
+    shouldBeOrigin: boolean
   ) {
     if (createdTimeEntry) {
       // push newly created STEOs (with isOrigin: false)
@@ -490,7 +490,7 @@ export class TimeEntriesSyncJob extends SyncJob {
         this.needsConfigJob = this.needsConfigJob || createdTimeEntry.needsConfigJob;
       }
     }
-    await this.updateJobLog(errors)
+
     return createdTimeEntry ?? undefined;
   }
 
@@ -500,7 +500,7 @@ export class TimeEntriesSyncJob extends SyncJob {
    * Updates given TESO's lastUpdated property to updated TE's date.
    * Returns updated TE
    *
-   * @param serviceDefinition
+   * @param syncedService
    * @param updatedTimeEntry
    * @param originalTimeEntry
    * @param otherServicesMappingsObjects
@@ -508,19 +508,19 @@ export class TimeEntriesSyncJob extends SyncJob {
    * @param shouldBeOrigin
    */
   private async _updateTimeEntry(
-      serviceDefinition: ServiceDefinition,
+      syncedService: SyncedService,
       updatedTimeEntry: TimeEntry,
       originalTimeEntry: TimeEntry,
       otherServicesMappingsObjects: MappingsObject[],
       timeEntrySyncedObject: TimeEntrySyncedObject,
       shouldBeOrigin: boolean) {
+    const serviceDefinition = syncedService.getServiceDefinition();
 
-    const service = SyncedServiceCreator.create(serviceDefinition, this._user);
     const serviceObjectsMappings = otherServicesMappingsObjects
       .filter(mappingsObject => mappingsObject.service === serviceDefinition.name)
       .map(mappingsObject => new ServiceObject(mappingsObject.id, mappingsObject.name, mappingsObject.type));
 
-    const createdTimeEntry = await service.updateTimeEntry(
+    const createdTimeEntry = await syncedService.updateTimeEntry(
         updatedTimeEntry.durationInMilliseconds,
         new Date(updatedTimeEntry.start),
         updatedTimeEntry.text,
@@ -532,8 +532,7 @@ export class TimeEntriesSyncJob extends SyncJob {
       createdTimeEntry,
       timeEntrySyncedObject,
       serviceDefinition.name,
-      shouldBeOrigin,
-      service.errors
+      shouldBeOrigin
     )
   }
 

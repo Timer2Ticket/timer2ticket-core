@@ -7,6 +7,7 @@ import {Timer2TicketError} from "../models/timer2TicketError";
 import {SentryService} from "../shared/sentry_service";
 import {ErrorService} from "../shared/error_service";
 import {ServiceTimeEntryObject} from "../models/synced_service/time_entry_synced_object/service_time_entry_object";
+import {ServiceDefinition} from "../models/service_definition/service_definition";
 
 export interface SyncedService {
 
@@ -109,4 +110,6 @@ export interface SyncedService {
   getTimeEntriesRelatedToMappingObjectForUser(mapping: Mapping, user: User): Promise<TimeEntry[] | null>;
 
   updateTimeEntry(durationInMilliseconds: number, start: Date, text: string, additionalData: ServiceObject[], originalTimeEntry: TimeEntry): Promise<TimeEntry>;
+
+  getServiceDefinition(): ServiceDefinition;
 }

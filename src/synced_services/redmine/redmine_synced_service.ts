@@ -16,6 +16,7 @@ import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 import {IssueStatus} from "../../models/synced_service/redmine/issue_status";
 import {ProjectStatus} from "../../models/synced_service/redmine/project_status";
+import {ExtraContext} from "../../models/extra_context";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -84,30 +85,21 @@ export class RedmineSyncedService implements SyncedService {
    * @param request
    * @returns
    */
-  private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest, body?: unknown): Promise<superagent.Response> {
+  private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest): Promise<superagent.Response> {
     let needToWait = false;
 
     // call request but with chained retry
-    const response = await request
-      .retry(2, (err, res) => {
+    const res = await request
+        .retry(2, (err, res) => {
 
-        if (res.status === 429) {
-          // cannot wait here, since it cannot be async method (well it can, but it does not wait)
-          needToWait = true;
-        } else if (res.status === 422) {
-            const error = this._errorService.createRedmineError(res.body.errors);
-          const context =  [
-            this._sentryService.createExtraContext("Status_code", {'status_code': res.status})
-          ]
-            if (body) {
-              // don't know how to create context from body otherwise. This is a band-aid solution.
-              context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
-              error.data = body;
-            }
-            this.errors.push(error);
-            this._sentryService.logRedmineError(this._projectsUri, res.body.errors, context)
+          if (res.status === 429) {
+            // cannot wait here, since it cannot be async method (well it can, but it does not wait)
+            needToWait = true;
           }
-      });
+        })
+        .catch(err => {
+          return err;
+        });
 
 
     if (needToWait) {
@@ -116,7 +108,9 @@ export class RedmineSyncedService implements SyncedService {
       await this._wait();
     }
 
-    return response;
+    if (res.response && !res.response.ok) throw res;
+
+    return res.response;
   }
 
 
@@ -429,14 +423,25 @@ export class RedmineSyncedService implements SyncedService {
     const entries: RedmineTimeEntry[] = [];
 
     do {
-      const response = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-          .get(this._timeEntriesUri)
-          .query(queryParams)
-          .accept('application/json')
-          .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
+      let response = null;
+      try {
+        response = await this._retryAndWaitInCaseOfTooManyRequests(
+            superagent
+                .get(this._timeEntriesUri)
+                .query(queryParams)
+                .accept('application/json')
+                .type('application/json')
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+        );
+      } catch (err: any) {
+        this.handleResponseException(err, 'getTimeEntries');
+        throw err;
+      }
+
+      if (!response) {
+        // shouldnt happen
+        return [];
+      }
 
       response.body['time_entries'].forEach((timeEntry: never) => {
         const durationInMilliseconds = timeEntry['hours'] * 60 * 60 * 1000;
@@ -547,6 +552,7 @@ export class RedmineSyncedService implements SyncedService {
         );
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
+        this.handleResponseException(err, 'getTimeEntriesRelatedToMappingObjectForUser');
         this._sentryService.logRedmineError(this._projectsUri, err)
         return null;
       }
@@ -643,15 +649,21 @@ export class RedmineSyncedService implements SyncedService {
       timeEntryBody['project_id'] = projectId;
     }
 
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .post(this._timeEntriesUri)
-        .accept('application/json')
-        .type('application/json')
-        .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-        .send({ time_entry: timeEntryBody }),
-      timeEntryBody
-    );
+    let response = null;
+
+    try {
+      response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .post(this._timeEntriesUri)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+              .send({ time_entry: timeEntryBody })
+      );
+    } catch (err: any) {
+      this.handleResponseException(err, 'createTimeEntry', timeEntryBody);
+      return null;
+    }
 
     if (!response || !response.ok) {
       //TODO potentially add some minor logging here
@@ -805,7 +817,7 @@ export class RedmineSyncedService implements SyncedService {
       return updated ?? timeEntry;
 
     } catch (error) {
-      //TODO handle and report that update somehow failed - but not critical - will be retried :)
+      this.handleResponseException(error, 'updateTimeEntry');
       return timeEntry;
     }
   }
@@ -825,6 +837,7 @@ export class RedmineSyncedService implements SyncedService {
       if (err && (err.status === 403 || err.status === 404)) {
         return true;
       } else {
+        this.handleResponseException(err, 'deleteTimeEntry');
         return false;
       }
     }
@@ -858,25 +871,32 @@ export class RedmineSyncedService implements SyncedService {
     return mappingsObjectsResult;
   }
 
-  handleResponseException(ex: any, functionInfo: string): void {
-    if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      const error = this._errorService.createRedmineError(ex);
-      const context =  [
-        this._sentryService.createExtraContext("Exception", ex),
-        this._sentryService.createExtraContext("Status_code", ex.status)
-      ]
+  handleResponseException(ex: any, functionInfo: string, body?: unknown): void {
+    let context: ExtraContext[] = [];
 
-      const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
-      this._sentryService.logRedmineError(this._projectsUri, message , context)
+    if (ex != undefined) {
+      context = [
+        this._sentryService.createExtraContext("Exception", ex),
+        this._sentryService.createExtraContext("Response", ex.response),
+      ];
+      if (body) {
+        context.push();
+        context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
+      }
+    }
+    if (ex !== undefined && (ex.response.status === 403 || ex.response.status === 401) ) {
+      const error = this._errorService.createRedmineError(ex.response.body.errors);
+
+      //const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
+      //this._sentryService.logRedmineError(this._projectsUri, message , context)
       error.data ="API key error. Please check if your API key is correct";
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
       // console.log('please, fix the apiKey of this user or set him as inactive');
       this.errors.push(error)
     } else {
       //TODO validate if this should be sent to user FE
-
       const message = `${functionInfo} failed with different reason than 403/401 response code!`
-      this._sentryService.logRedmineError(this._projectsUri, message)
+      this._sentryService.logRedmineError(this._projectsUri, message, context)
       // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
       // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
     }
@@ -914,5 +934,9 @@ export class RedmineSyncedService implements SyncedService {
       this.handleResponseException(ex, 'getServiceObjects');
       throw ex;
     }
+  }
+
+  public getServiceDefinition(): ServiceDefinition {
+    return this._serviceDefinition;
   }
 }
