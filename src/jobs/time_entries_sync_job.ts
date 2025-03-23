@@ -164,13 +164,13 @@ export class TimeEntriesSyncJob extends SyncJob {
             if (!dbUpdateResult) {
               const scope = new Sentry.Scope();
               scope.setContext("synced object", JSON.parse(JSON.stringify(timeEntrySyncedObjectWrapper.timeEntrySyncedObject)))
-              Sentry.captureException("Failed to update database");
+              //Sentry.captureException("Failed to update database");
               // console.error('err: TESyncJob: b), c), d), e); DB update');
             }
           }
         } catch (ex) {
           operationsOk = false;
-          // captureException(ex);
+          //captureException(ex);
           //console.error(ex);
           // console.error('err: TESyncJob: b), c), d), e); exception');
         }
@@ -419,15 +419,6 @@ export class TimeEntriesSyncJob extends SyncJob {
       );
     }
     return true;
-  }
-
-  private async updateJobLog(errors: Timer2TicketError[])
-  {
-    this._jobLog.errors = this._jobLog.errors.concat(errors);
-    const updated = await databaseService.updateJobLog(this._jobLog);
-    if (updated instanceof JobLog) {
-      this._jobLog = updated;
-    }
   }
 
   /**

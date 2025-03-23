@@ -36,8 +36,7 @@ export class ConfigSyncJob extends SyncJob {
     //if we get boolean, a problem occurred while getting data from service (most likely 401 or 403 error)
     //we dont have all the service objects and stop the job
     if (typeof objectsToSync === "boolean") {
-      let message: string = 'Problem occurred while getting primary service objects.';
-      this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+      await this.updateJobLog(primarySyncedService.errors)
       return false;
     }
 
@@ -51,8 +50,7 @@ export class ConfigSyncJob extends SyncJob {
       const allServiceObjects = await syncedService.getAllServiceObjects(configLastSyncAt);
       //same as above, there was a problem communication problem with service. We stop the job.
       if (typeof allServiceObjects === "boolean") {
-        let message: string = 'Problem occurred while getting secondary service objects';
-        this._jobLog.errors.push(this._errorService.createConfigJobError(message));
+        await this.updateJobLog(syncedService.errors)
         return false;
       }
 
@@ -103,11 +101,6 @@ export class ConfigSyncJob extends SyncJob {
         }
       } catch (ex) {
         operationsOk = false;
-        //TODO figure out better way to work with extra context.
-        //temporary console log to test if this is the correct place.
-        console.log(`User: ${this._user.username} experienced error in config job for object: ${objectToSync.name}, ${objectToSync.type}, ${objectToSync.id}`);
-        let context = this._sentryService.createExtraContext('Object_to_sync', JSON.parse(JSON.stringify(objectToSync)));
-        this._sentryService.logError(ex, context);
       }
     }
 
@@ -123,7 +116,7 @@ export class ConfigSyncJob extends SyncJob {
     // even if some api operations were not ok, persist changes to the mappings - better than nothing
     await databaseService.updateUserMappings(this._user);
 
-    await databaseService.updateJobLog(this._jobLog);
+    await this.updateJobLog(Array.from(secondaryServicesWrappersMap.values()).flatMap(wrapper => wrapper.syncedService?.errors ?? []));
 
     return operationsOk;
   }
@@ -152,7 +145,7 @@ export class ConfigSyncJob extends SyncJob {
           continue;
         }
         // firstly create object in the service, then create serviceObject with newly acquired id
-        const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
+        const newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
         mappingsObject = new MappingsObject(newObject.id, newObject.name, serviceDefinition.name, newObject.type);
       }
 
@@ -189,45 +182,27 @@ export class ConfigSyncJob extends SyncJob {
         // mappingObject is missing, create a new one and add to mapping (maybe new service was added)
         // create a real object in the service and add mappingObject
         // firstly create object in the service, then create serviceObject with newly acquired id
-        const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
+        const newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
         const newMappingsObject = new MappingsObject(newObject.id, newObject.name, serviceDefinition.name, newObject.type);
         mapping.mappingsObjects.push(newMappingsObject);
       } else {
         // scenario b), c), e)
         // check if mapping corresponds with real object in the service
-        const objectBasedOnMapping = await serviceWrapper.allServiceObjects
+        const objectBasedOnMapping = serviceWrapper.allServiceObjects
           .find(serviceObject => serviceObject.id === mappingsObject.id && serviceObject.type === mappingsObject.type);
 
         if (!objectBasedOnMapping) {
           // scenario e), create new object in the service
-          const newObject = await this._createServiceObjectInService(serviceWrapper, objectToSync);
+          const newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
           mappingsObject.id = newObject.id;
           mappingsObject.name = newObject.name;
           mappingsObject.lastUpdated = Date.now();
         } else if (objectBasedOnMapping.name !== serviceWrapper.syncedService.getFullNameForServiceObject(objectToSync)) {
           // scenario b)
           // name is incorrect => maybe mapping was outdated or/and real object was outdated
-          let updatedObject = null;
-          try {
-                updatedObject = await serviceWrapper.syncedService.updateServiceObject(
-                mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
-            );
-          } catch (ex: any) {
-            if (ex.status !== 400) {
-              throw ex;
-            }
-            // 400 ~ maybe object already exists and cannot be updated (for example object needs to be unique - name)?
-            // => try to find it and use it for the mapping
-            const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));
-            updatedObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
-            if (!updatedObject) {
-              const context = [
-                this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
-              ]
-              this._sentryService.logError(ex, context);
-              throw ex;
-            }
-          }
+          const updatedObject = await serviceWrapper.syncedService.updateServiceObject(
+              mappingsObject.id, new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type)
+          );
           // console.log(`ConfigSyncJob: Updated object ${updatedObject.name}`);
           mappingsObject.name = updatedObject.name;
           mappingsObject.lastUpdated = Date.now();
@@ -239,29 +214,5 @@ export class ConfigSyncJob extends SyncJob {
     }
 
     return true;
-  }
-
-  private async _createServiceObjectInService(serviceWrapper: SyncedServiceWrapper, objectToSync: ServiceObject): Promise<ServiceObject> {
-    let newObject;
-    try {
-      newObject = await serviceWrapper.syncedService.createServiceObject(objectToSync.id, objectToSync.name, objectToSync.type);
-    } catch (ex: any) {
-      if (ex.status !== 400) {
-        throw ex;
-      }
-      // 400 ~ maybe object already exists and cannot be created (for example object needs to be unique - name)?
-      // => try to find it and use it for the mapping
-      const serviceObjectName = serviceWrapper.syncedService.getFullNameForServiceObject(new ServiceObject(objectToSync.id, objectToSync.name, objectToSync.type));
-      newObject = serviceWrapper.allServiceObjects.find(serviceObject => serviceObject.name === serviceObjectName);
-      if (!newObject) {
-        let context = [
-          this._sentryService.createExtraContext('Object_to_sync', {'id': objectToSync.id, 'name': objectToSync.name, 'type': objectToSync.type})
-        ]
-        this._sentryService.logError(ex, context);
-        throw ex;
-      }
-      // console.log(`ConfigSyncJob: Creating mapping, but object exists, using real object ${newObject.name}`);
-    }
-    return newObject;
   }
 }
