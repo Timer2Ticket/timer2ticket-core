@@ -852,7 +852,7 @@ export class RedmineSyncedService implements SyncedService {
       }
     }
 
-    const error = this._errorService.createRedmineError(ex ?? {});
+    const error = this._errorService.createRedmineError(ex?.response?.error ?? {});
     error.data = {
       status: ex.response.statusCode,
       errors: ex.response.body.errors,
@@ -866,7 +866,6 @@ export class RedmineSyncedService implements SyncedService {
       error.specification += " - " + message;
       this._sentryService.logRedmineError(this._projectsUri, message, context);
     }
-
     this.errors.push(error);
   }
 

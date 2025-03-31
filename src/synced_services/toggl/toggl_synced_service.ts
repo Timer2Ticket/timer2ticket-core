@@ -669,7 +669,7 @@ export class TogglTrackSyncedService implements SyncedService {
       }
     }
 
-    const error = this._errorService.createTogglError(ex ?? {});
+    const error = this._errorService.createTogglError(ex?.response?.error ?? {});
     error.data = {
       status: ex.response.statusCode,
       errors: ex.response.body.errors,
