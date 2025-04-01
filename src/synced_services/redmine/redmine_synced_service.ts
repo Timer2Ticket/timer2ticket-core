@@ -92,9 +92,9 @@ export class RedmineSyncedService implements SyncedService {
 
     // call request but with chained retry
     const res = await request
+        .timeout(5000)
         .retry(2, (err, res) => {
-
-          if (res.status === 429) {
+          if (res && res.status === 429) {
             // cannot wait here, since it cannot be async method (well it can, but it does not wait)
             needToWait = true;
           }
@@ -111,7 +111,7 @@ export class RedmineSyncedService implements SyncedService {
       await this._wait();
     }
 
-    if (res.response && !res.response.ok) {
+    if ((!res.response && !res.ok) || (res.response && !res.response.ok)) {
       throw res;
     }
     return res;
@@ -852,20 +852,27 @@ export class RedmineSyncedService implements SyncedService {
       }
     }
 
-    const error = this._errorService.createRedmineError(ex?.response?.error ?? {});
-    error.data = {
-      status: ex.response.statusCode,
-      errors: ex.response.body.errors,
-      extraContext: extraContext ?? {}
-    };
+    const error = this._errorService.createRedmineError(ex?.response?.error ?? ex);
+    if (ex.response) {
+      error.data = {
+        status: ex.response.statusCode,
+        errors: ex.response.body.errors,
+        extraContext: extraContext ?? {}
+      };
+    }
 
-    if (ex.response.status === 403 || ex.response.status === 401) {
+    if (ex.response && (ex.response.statusCode === 401 || ex.response.statusCode === 403)) {
       error.specification += " - API key error";
-    } else {
+    } else if (ex.response) {
       const message = `${functionInfo} failed with a response code ${ex.response.statusCode}`;
       error.specification += " - " + message;
       this._sentryService.logRedmineError(this._projectsUri, message, context);
+    } else {
+      const message = `${functionInfo} failed without a response`;
+      error.specification += " - " + message;
+      this._sentryService.logRedmineError(this._projectsUri, message, context);
     }
+
     this.errors.push(error);
   }
 
