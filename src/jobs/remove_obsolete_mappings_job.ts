@@ -106,7 +106,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                     // service object is missing, it is ok to delete the mapping
                     operationOk = true;
                 } else {
-                    this._jobLog.errors.push(...syncedService.errors);
+                    if (syncedService.errors.length > 0) {
+                        this._jobLog.errors.push(syncedService.errors[syncedService.errors.length - 1]);
+                    }
                 }
             }
             operationsOk &&= operationOk;
@@ -157,7 +159,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                     const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);
                     if (!relatedTimeEntriesFromApi) {
                         operationsOk = false;
-                        this._jobLog.errors.push(...service.errors);
+                        if (service.errors.length > 0) {
+                            this._jobLog.errors.push(service.errors[service.errors.length - 1]);
+                        }
                     } else {
                         for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
                             const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, primaryObjectServiceName, this._user._id);
@@ -196,7 +200,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                             await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
                         } catch (exception) {
                             operationsOk = false;
-                            this._jobLog.errors.push(...togglService.syncedService.errors);
+                            if (togglService.syncedService.errors.length > 0) {
+                                this._jobLog.errors.push(togglService.syncedService.errors[togglService.syncedService.errors.length - 1]);
+                            }
                         }
                     }
 
