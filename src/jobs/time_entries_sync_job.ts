@@ -11,8 +11,6 @@ import { MappingsObject } from "../models/mapping/mappings_object";
 import { Utilities } from "../shared/utilities";
 import {captureException} from "@sentry/node";
 import * as Sentry from "@sentry/node";
-import {JobLog} from "../models/job_log";
-import {Timer2TicketError} from "../models/timer2TicketError";
 import superagent from "superagent";
 import { Constants } from "../shared/constants";
 
@@ -392,7 +390,6 @@ export class TimeEntriesSyncJob extends SyncJob {
           if (serviceTimeEntryObjectWrapper !== originServiceTimeEntryObjectWrapper && serviceTimeEntryObjectWrapper.timeEntry) {
             allDeleted &&= await serviceTimeEntryObjectWrapper.syncedService.deleteTimeEntry(serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id);
             // TODO: Check this console message if needed
-            // TODO reuse synced service
             //console.log(`TESyncJob: deleted TE from the ${serviceTimeEntryObjectWrapper.serviceDefinition.name} with id = ${serviceTimeEntryObjectWrapper.serviceTimeEntryObject.id}`);
           }
         }
