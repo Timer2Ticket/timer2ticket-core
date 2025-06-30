@@ -64,7 +64,7 @@ export interface SyncedService {
    */
   updateServiceObject(objectId: string | number, serviceObject: ServiceObject): Promise<ServiceObject>;
 
-  deleteServiceObject(id: string | number, objectType: string): Promise<boolean>;
+  deleteServiceObject(id: string | number, objectType: string, name: string): Promise<boolean>;
 
   /**
    * Generates full name for given service object (Toggl, for example, generates names for tags as 'name (type)' or if issue, then '#id name (type)')

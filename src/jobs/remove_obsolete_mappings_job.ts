@@ -100,7 +100,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             if (!syncedService) continue;
             let operationOk = true;
             try {
-                operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type);
+                operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type, mappingObject.name);
             } catch (ex: any) {
                 if (ex.status === 404) {
                     // service object is missing, it is ok to delete the mapping
