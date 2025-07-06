@@ -858,17 +858,20 @@ export class RedmineSyncedService implements SyncedService {
     } else if (ex.response) {
       const message = `${extraContext.functionName} failed with a response code ${ex.response.statusCode}`;
       error.specification += " - " + message;
-      extraContext.responseErrors = ex.response.body?.errors ?? [];
+      extraContext.responseErrors = !ex.response.body?.errors ? [ex.message] : ex.response.body.errors;
+      extraContext.responseErrors.push(ex.response.statusCode)
       error.data = extraContext;
 
       this._sentryService.logRedmineError(this._projectsUri, message, context);
     } else {
       const message = `${extraContext.functionName} failed without a response`;
       error.specification += " - " + message;
+      extraContext.responseErrors = [ex.message];
       error.data = extraContext;
 
       this._sentryService.logRedmineError(this._projectsUri, message, context);
     }
+
 
     this.errors.push(error);
   }

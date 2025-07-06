@@ -106,6 +106,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                     // service object is missing, it is ok to delete the mapping
                     operationOk = true;
                 } else {
+                    operationOk &&= ex.response.ok;
                     if (syncedService.errors.length > 0) {
                         this._jobLog.errors.push(syncedService.errors[syncedService.errors.length - 1]);
                     }

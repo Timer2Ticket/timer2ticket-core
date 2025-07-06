@@ -670,13 +670,15 @@ export class TogglTrackSyncedService implements SyncedService {
       const message = `${extraContext.functionName} failed with a response code ${ex.response.statusCode}`;
       error.specification += " - " + message;
       error.data = extraContext;
-      error.data.responseErrors = !ex.response.text ? [] : [ex.response.text];
+      error.data.responseErrors = !ex.response.text ? [ex.response.statusCode] : [ex.response.text, ex.response.statusCode];
 
       this._sentryService.logTogglError(message, context);
     } else {
       const message = `${extraContext.functionName} failed without a response`;
       error.specification += " - " + message;
+      extraContext.responseErrors = [ex.message];
       error.data = extraContext;
+
       this._sentryService.logTogglError(message, context);
     }
 
