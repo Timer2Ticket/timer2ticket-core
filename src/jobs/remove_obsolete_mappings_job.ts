@@ -63,7 +63,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             } catch (err: any) {
                 await this.updateJobLog(primarySyncedService.errors);
                 // keep old behaviour
-                throw err;
+                // throw err;
             }
         }
 
