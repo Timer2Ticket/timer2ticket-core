@@ -355,25 +355,24 @@ export class TogglTrackSyncedService implements SyncedService {
     return entries;
   }
 
-  async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string) {
+  async replaceTimeEntryDescription(timeEntry: ServiceTimeEntryObject, tagName: number | string): Promise<void> {
     const start = new Date();
     start.setMonth(start.getMonth() - 6);
     const timeEntryFromApi = await this.getTimeEntryById(timeEntry.id, start);
 
-    if (timeEntryFromApi === null) {
-       return;
+    if (timeEntryFromApi === null || timeEntryFromApi.text.includes(tagName.toString())) {
+      return;
     }
 
     const body =
       [
         {'op': 'replace',
           'path': '/description',
-          'value': timeEntryFromApi != null ? timeEntryFromApi?.text + ` ${tagName}` : `${tagName}`
+          'value': timeEntryFromApi?.text + ` ${tagName}`
         }
       ]
     ;
-
-    const response = await this._retryAndWaitInCaseOfTooManyRequests(
+    await this._retryAndWaitInCaseOfTooManyRequests(
         superagent
             .patch(`${this._workspacesTimeEntriesUri}/${timeEntry?.id}`)
             .auth(this._serviceDefinition.apiKey, 'api_token')
