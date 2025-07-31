@@ -16,6 +16,8 @@ import {ErrorService} from "../../shared/error_service";
 import {ServiceTimeEntryObject} from "../../models/synced_service/time_entry_synced_object/service_time_entry_object";
 import {IssueStatus} from "../../models/synced_service/redmine/issue_status";
 import {ProjectStatus} from "../../models/synced_service/redmine/project_status";
+import {ExtraContext} from "../../models/extra_context";
+import {T2tErrorExtraContext} from "../../models/t2t_error_extra_context";
 
 export class RedmineSyncedService implements SyncedService {
   private _serviceDefinition: ServiceDefinition;
@@ -82,32 +84,25 @@ export class RedmineSyncedService implements SyncedService {
    * Plus waiting if responded with 429 Too many requests.
    * (Seems like Redmine does not respond with 429, but handled just in case.)
    * @param request
+   * @param extraContext
    * @returns
    */
-  private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest, body?: unknown): Promise<superagent.Response> {
+  private async _retryAndWaitInCaseOfTooManyRequests(request: SuperAgentRequest, extraContext: T2tErrorExtraContext): Promise<superagent.Response> {
     let needToWait = false;
 
     // call request but with chained retry
-    const response = await request
-      .retry(2, (err, res) => {
-
-        if (res.status === 429) {
-          // cannot wait here, since it cannot be async method (well it can, but it does not wait)
-          needToWait = true;
-        } else if (res.status === 422) {
-            const error = this._errorService.createRedmineError(res.body.errors);
-          const context =  [
-            this._sentryService.createExtraContext("Status_code", {'status_code': res.status})
-          ]
-            if (body) {
-              // don't know how to create context from body otherwise. This is a band-aid solution.
-              context.push(this._sentryService.createExtraContext("Time entry", JSON.parse(JSON.stringify(body))));
-              error.data = body;
-            }
-            this.errors.push(error);
-            this._sentryService.logRedmineError(this._projectsUri, res.body.errors, context)
+    const res = await request
+        .timeout(5000)
+        .retry(2, (err, res) => {
+          if (res && res.status === 429) {
+            // cannot wait here, since it cannot be async method (well it can, but it does not wait)
+            needToWait = true;
           }
-      });
+        })
+        .catch(err => {
+          this.handleResponseException(err, extraContext)
+          return err;
+        });
 
 
     if (needToWait) {
@@ -116,7 +111,10 @@ export class RedmineSyncedService implements SyncedService {
       await this._wait();
     }
 
-    return response;
+    if ((!res.response && !res.ok) || (res.response && !res.response.ok)) {
+      throw res;
+    }
+    return res;
   }
 
 
@@ -266,21 +264,15 @@ export class RedmineSyncedService implements SyncedService {
     const projects: ServiceObject[] = [];
 
     do {
-      let response;
-      try {
-        response = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._projectsUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-        );
-      } catch (ex: any) {
-        this.handleResponseException(ex, 'getAllProjects');
-        throw ex;
-      }
-
+      const response = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._projectsUri)
+              .query(queryParams)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'getAllProjects')
+      );
 
       response.body?.projects.forEach((project: never) => {
         projects.push(
@@ -303,20 +295,15 @@ export class RedmineSyncedService implements SyncedService {
     const issues: ServiceObject[] = [];
 
     do {
-      let responseIssues;
-      try {
-        responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._issuesUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-        );
-      } catch (ex: any) {
-        this.handleResponseException(ex, 'fetchIssues');
-        throw ex;
-      }
+      const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._issuesUri)
+              .query(queryParams)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'fetchIssues')
+      );
 
       responseIssues.body?.issues.forEach((issue: never) => {
         issues.push(
@@ -352,20 +339,15 @@ export class RedmineSyncedService implements SyncedService {
 
     // issues (paginate)
     do {
-      let responseIssues;
-      try {
-        responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
-            superagent
-                .get(this._issuesUri)
-                .query(queryParams)
-                .accept('application/json')
-                .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-        );
-      } catch (ex: any) {
-        this.handleResponseException(ex, 'getAllAdditionalSOs for issues')
-        throw ex;
-      }
+      const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+          superagent
+              .get(this._issuesUri)
+              .query(queryParams)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'getAllAdditionalSOs for issues')
+      );
 
       responseIssues.body?.issues.forEach((issue: never) => {
         issues.push(
@@ -382,21 +364,14 @@ export class RedmineSyncedService implements SyncedService {
 
     const timeEntryActivities: ServiceObject[] = [];
 
-    let responseTimeEntryActivities;
-    try {
-      // time entry activities (do not paginate)
-      responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
-          superagent
-              .get(this._timeEntryActivitiesUri)
-              .accept('application/json')
-              .type('application/json')
-              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
-    } catch (ex: any) {
-      this.handleResponseException(ex, 'getAllAdditionalSOs for timeEntryActivities')
-      throw ex;
-    }
-
+    const responseTimeEntryActivities = await this._retryAndWaitInCaseOfTooManyRequests(
+        superagent
+            .get(this._timeEntryActivitiesUri)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+        new T2tErrorExtraContext(this._serviceDefinition.name, 'getAllAdditionalSOs for timeEntryActivities')
+    );
 
     responseTimeEntryActivities.body?.time_entry_activities.forEach((timeEntryActivity: never) => {
       timeEntryActivities.push(
@@ -430,12 +405,13 @@ export class RedmineSyncedService implements SyncedService {
 
     do {
       const response = await this._retryAndWaitInCaseOfTooManyRequests(
-        superagent
-          .get(this._timeEntriesUri)
-          .query(queryParams)
-          .accept('application/json')
-          .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          superagent
+              .get(this._timeEntriesUri)
+              .query(queryParams)
+              .accept('application/json')
+              .type('application/json')
+              .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'getTimeEntries')
       );
 
       response.body['time_entries'].forEach((timeEntry: never) => {
@@ -474,7 +450,8 @@ export class RedmineSyncedService implements SyncedService {
           .get(this._timeEntryUri.replace('[id]', id.toString()))
           .accept('application/json')
           .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'getTimeEntryById', id.toString())
       );
     } catch (err: any) {
       if (err && (err.status === 403 || err.status === 404)) {
@@ -543,11 +520,11 @@ export class RedmineSyncedService implements SyncedService {
                 .query(queryParams)
                 .accept('application/json')
                 .type('application/json')
-                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+                .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+            new T2tErrorExtraContext(this._serviceDefinition.name, 'getTimeEntriesRelatedToMappingObjectForUser', mapping.primaryObjectId.toString())
         );
       } catch (err: any) {
         //console.log('[OMR] -> chyteny error v response try - catch bloku!');
-        this._sentryService.logRedmineError(this._projectsUri, err)
         return null;
       }
 
@@ -644,13 +621,13 @@ export class RedmineSyncedService implements SyncedService {
     }
 
     const response = await this._retryAndWaitInCaseOfTooManyRequests(
-      superagent
-        .post(this._timeEntriesUri)
-        .accept('application/json')
-        .type('application/json')
-        .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-        .send({ time_entry: timeEntryBody }),
-      timeEntryBody
+        superagent
+            .post(this._timeEntriesUri)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+            .send({ time_entry: timeEntryBody }),
+        new T2tErrorExtraContext(this._serviceDefinition.name, 'createTimeEntry', null, ["TE started: " + start.toISOString()])
     );
 
     if (!response || !response.ok) {
@@ -793,7 +770,8 @@ export class RedmineSyncedService implements SyncedService {
               .type('application/json')
               .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
               .send({ time_entry: timeEntryBody }),
-      )
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'updateTimeEntry', originalTimeEntry.originalEntry.id.toString(), ["TE started: " + start.toISOString()])
+      );
 
       const updated = await this.getTimeEntryById(originalTimeEntry.originalEntry.id);
       //if project not in mappings resync just in case
@@ -805,7 +783,6 @@ export class RedmineSyncedService implements SyncedService {
       return updated ?? timeEntry;
 
     } catch (error) {
-      //TODO handle and report that update somehow failed - but not critical - will be retried :)
       return timeEntry;
     }
   }
@@ -817,7 +794,8 @@ export class RedmineSyncedService implements SyncedService {
           .delete(this._timeEntryUri.replace('[id]', id.toString()))
           .accept('application/json')
           .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
+          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+          new T2tErrorExtraContext(this._serviceDefinition.name, 'deleteTimeEntry', id.toString())
       );
 
       return response.ok;
@@ -858,28 +836,44 @@ export class RedmineSyncedService implements SyncedService {
     return mappingsObjectsResult;
   }
 
-  handleResponseException(ex: any, functionInfo: string): void {
-    if (ex !== undefined && (ex.status === 403 || ex.status === 401) ) {
-      const error = this._errorService.createRedmineError(ex);
-      const context =  [
+  handleResponseException(ex: any, extraContext: T2tErrorExtraContext): void {
+    let context: ExtraContext[] = [];
+    if (ex !== undefined) {
+      context = [
         this._sentryService.createExtraContext("Exception", ex),
-        this._sentryService.createExtraContext("Status_code", ex.status)
-      ]
-
-      const message = `${functionInfo} failed with status code= ${ex.status} \nplease, fix the apiKey of this user or set him as inactive`
-      this._sentryService.logRedmineError(this._projectsUri, message , context)
-      error.data ="API key error. Please check if your API key is correct";
-      // console.error('[REDMINE] '.concat(functionInfo, ' failed with status code=', ex.status));
-      // console.log('please, fix the apiKey of this user or set him as inactive');
-      this.errors.push(error)
-    } else {
-      //TODO validate if this should be sent to user FE
-
-      const message = `${functionInfo} failed with different reason than 403/401 response code!`
-      this._sentryService.logRedmineError(this._projectsUri, message)
-      // error.data = ''.concat(functionInfo, ' failed with different reason than 403/401 response code!');
-      // console.error('[REDMINE] '.concat(functionInfo, ' failed with different reason than 403/401 response code!'));
+        this._sentryService.createExtraContext("Response", ex.response),
+      ];
+      if (extraContext) {
+        context.push(this._sentryService.createExtraContext("Extra_context", JSON.parse(JSON.stringify(extraContext))));
+      }
     }
+
+    const error = this._errorService.createRedmineError(ex?.response?.error ?? ex);
+
+
+    if (ex.response && (ex.response.statusCode === 401 || ex.response.statusCode === 403)) {
+      error.specification += " - API key error";
+      error.data = undefined;
+
+    } else if (ex.response) {
+      const message = `${extraContext.functionName} failed with a response code ${ex.response.statusCode}`;
+      error.specification += " - " + message;
+      extraContext.responseErrors = !ex.response.body?.errors ? [ex.message] : ex.response.body.errors;
+      extraContext.responseErrors.push(ex.response.statusCode)
+      error.data = extraContext;
+
+      this._sentryService.logRedmineError(this._projectsUri, message, context);
+    } else {
+      const message = `${extraContext.functionName} failed without a response`;
+      error.specification += " - " + message;
+      extraContext.responseErrors = [ex.message];
+      error.data = extraContext;
+
+      this._sentryService.logRedmineError(this._projectsUri, message, context);
+    }
+
+
+    this.errors.push(error);
   }
 
   async getServiceObjects(ids: (string | number)[]): Promise<ServiceObject[]> {
@@ -892,27 +886,28 @@ export class RedmineSyncedService implements SyncedService {
       issue_id: ids.join(','),
       status_id: '*'
     };
-    try {
-      const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
+
+    const responseIssues = await this._retryAndWaitInCaseOfTooManyRequests(
         superagent
-          .get(this._issuesUri)
-          .query(queryParams)
-          .accept('application/json')
-          .type('application/json')
-          .set('X-Redmine-API-Key', this._serviceDefinition.apiKey)
-      );
-      responseIssues.body?.issues.forEach((issue: never) => {
-        issues.push(
+            .get(this._issuesUri)
+            .query(queryParams)
+            .accept('application/json')
+            .type('application/json')
+            .set('X-Redmine-API-Key', this._serviceDefinition.apiKey),
+        new T2tErrorExtraContext(this._serviceDefinition.name, 'getServiceObjects')
+    );
+    responseIssues.body?.issues.forEach((issue: never) => {
+      issues.push(
           new ServiceObject(
-            issue['id'],
-            issue['subject'],
-            this._issuesType,
+              issue['id'],
+              issue['subject'],
+              this._issuesType,
           ));
-      });
-      return issues;
-    } catch (ex: any) {
-      this.handleResponseException(ex, 'getServiceObjects');
-      throw ex;
-    }
+    });
+    return issues;
+  }
+
+  public getServiceDefinition(): ServiceDefinition {
+    return this._serviceDefinition;
   }
 }
