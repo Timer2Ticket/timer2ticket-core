@@ -45,21 +45,29 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                         mapping.primaryObjectType == objectToRemove.type &&
                         (mapping.primaryObjectType == 'issue' || mapping.primaryObjectType == 'project' )));
             }
+        } else {
+            await this.updateJobLog(primarySyncedService.errors);
         }
 
         // case 2 - remove mappings with non-existing service object in primary service
         const mappingChunks = this._chunkArray(userMappings.filter(mapping => mapping.primaryObjectType == 'issue'), 50);
         for (const chunk of mappingChunks) {
-            const issues = await primarySyncedService.getServiceObjects(chunk.map(mapping => mapping.primaryObjectId));
-            if (issues.length !== chunk.length) {
-                // some issues were not found - find mappings to remove
-                const foundIssueIds = new Set(issues.map(issue => issue.id));
-                const notFoundMappings = chunk.filter(mapping => !foundIssueIds.has(mapping.primaryObjectId));
-                obsoleteMappings.push(...notFoundMappings);
+            try {
+                const issues = await primarySyncedService.getServiceObjects(chunk.map(mapping => mapping.primaryObjectId));
+                if (issues.length !== chunk.length) {
+                    // some issues were not found - find mappings to remove
+                    const foundIssueIds = new Set(issues.map(issue => issue.id));
+                    const notFoundMappings = chunk.filter(mapping => !foundIssueIds.has(mapping.primaryObjectId));
+                    obsoleteMappings.push(...notFoundMappings);
+                }
+            } catch (err: any) {
+                await this.updateJobLog(primarySyncedService.errors);
+                // keep old behaviour
+                // throw err;
             }
         }
 
-        console.log('Obsolete mappings: ', obsoleteMappings);
+        //console.log('Obsolete mappings: ', obsoleteMappings);
 
         // remove duplicates
         obsoleteMappings = Array.from(new Set(obsoleteMappings));
@@ -72,7 +80,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
         // persist changes in the mappings
         // even if some api operations were not ok, persist changes to the mappings - better than nothing
         await databaseService.updateUserMappings(this._user);
-        await databaseService.updateJobLog(this._jobLog);
+
+        await this.updateJobLog([]);
+
         return operationsOk;
     }
 
@@ -90,20 +100,16 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             if (!syncedService) continue;
             let operationOk = true;
             try {
-                operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type);
+                operationOk = await syncedService.deleteServiceObject(mappingObject.id, mappingObject.type, mappingObject.name);
             } catch (ex: any) {
                 if (ex.status === 404) {
                     // service object is missing, it is ok to delete the mapping
                     operationOk = true;
                 } else {
-                    const context = [
-                        this._sentryService.createExtraContext('Mapping to delete', {
-                            'id': mappingObject.id,
-                            'type': mappingObject.type
-                        })
-                    ]
-                    this._sentryService.logError(ex, context);
-                    // console.error('err: ConfigSyncJob: delete; exception');
+                    operationOk &&= ex.response.ok;
+                    if (syncedService.errors.length > 0) {
+                        this._jobLog.errors.push(syncedService.errors[syncedService.errors.length - 1]);
+                    }
                 }
             }
             operationsOk &&= operationOk;
@@ -155,6 +161,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                     //User doesnt have to have time entries - so this if doesnt really make sense
                     if (!relatedTimeEntriesFromApi) {
                         operationsOk = false;
+                        if (service.errors.length > 0) {
+                            this._jobLog.errors.push(service.errors[service.errors.length - 1]);
+                        }
                     } else {
                         for (const timeEntryFromApi of relatedTimeEntriesFromApi) {
                             const foundTESO = await databaseService.getTimeEntrySyncedObjectForArchiving(timeEntryFromApi.id, primaryObjectServiceName, this._user._id);
@@ -193,6 +202,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                             await togglService.syncedService.replaceTimeEntryDescription(toggleTimeEntry, timeEntryToArchive.issueName)
                         } catch (exception) {
                             operationsOk = false;
+                            if (togglService.syncedService.errors.length > 0) {
+                                this._jobLog.errors.push(togglService.syncedService.errors[togglService.syncedService.errors.length - 1]);
+                            }
                         }
                     }
 
@@ -202,12 +214,9 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
             }
 
             // and remove all obsolete mappings from user's mappings
-            this._user.mappings
-                = this._user
-                .mappings
-                .filter(
-                    mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping)
-                        === undefined) ?? [];
+            this._user.mappings = this._user.mappings.filter(
+                mapping => obsoleteMappings.find(obsoleteMapping => obsoleteMapping === mapping) === undefined
+            ) ?? [];
         }
         return operationsOk;
     }
