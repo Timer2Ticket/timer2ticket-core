@@ -158,6 +158,7 @@ export class RemoveObsoleteMappingsJob extends SyncJob {
                 } else {
                     const service = SyncedServiceCreator.create(primaryServiceDefinition)
                     const relatedTimeEntriesFromApi = await service.getTimeEntriesRelatedToMappingObjectForUser(mapping, this._user);
+                    //User doesnt have to have time entries - so this if doesnt really make sense
                     if (!relatedTimeEntriesFromApi) {
                         operationsOk = false;
                         if (service.errors.length > 0) {
